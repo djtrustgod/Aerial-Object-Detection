@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}History - Aerial Detection{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>Detection History</h2>
+        <div class="filter-controls">
+            <select id="class-filter" onchange="filterEvents()">
+                <option value="">All Classes</option>
+                <option value="aircraft">Aircraft</option>
+                <option value="satellite">Satellite</option>
+                <option value="uap">UAP</option>
+                <option value="unknown">Unknown</option>
+            </select>
+            <button class="btn" onclick="refreshHistory()">Refresh</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <table class="event-table" id="history-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Time</th>
+                    <th>Class</th>
+                    <th>Confidence</th>
+                    <th>Position</th>
+                    <th>Speed</th>
+                    <th>Track Length</th>
+                    <th>Clip</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in events %}
+                <tr class="event-row classification-{{ event.classification.value }}">
+                    <td>{{ event.event_id }}</td>
+                    <td>{{ "%.1f"|format(event.start_time) }}</td>
+                    <td><span class="class-badge {{ event.classification.value }}">{{ event.classification.value }}</span></td>
+                    <td>{{ "%.0f"|format(event.confidence * 100) }}%</td>
+                    <td>({{ "%.0f"|format(event.avg_x) }}, {{ "%.0f"|format(event.avg_y) }})</td>
+                    <td>{{ "%.1f"|format(event.avg_speed) }} px/f</td>
+                    <td>{{ event.trajectory_length }}</td>
+                    <td>
+                        {% if event.clip_path %}
+                        <a href="/clips/{{ event.clip_path.split('/')[-1] }}" target="_blank" class="btn btn-small">Play</a>
+                        {% else %}
+                        --
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not events %}
+                <tr><td colspan="8" class="empty-state">No events recorded yet</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Clip playback modal -->
+<div id="clip-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <video id="clip-player" controls autoplay></video>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function filterEvents() {
+    const cls = document.getElementById('class-filter').value;
+    const url = cls ? `/api/events?classification=${cls}` : '/api/events';
+    const resp = await fetch(url);
+    const events = await resp.json();
+    renderTable(events);
+}
+
+async function refreshHistory() {
+    const resp = await fetch('/api/events?limit=100');
+    const events = await resp.json();
+    renderTable(events);
+}
+
+function renderTable(events) {
+    const tbody = document.querySelector('#history-table tbody');
+    if (events.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No events found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = events.map(e => `
+        <tr class="event-row classification-${e.classification}">
+            <td>${e.event_id || '--'}</td>
+            <td>${new Date(e.start_time * 1000).toLocaleTimeString()}</td>
+            <td><span class="class-badge ${e.classification}">${e.classification}</span></td>
+            <td>${(e.confidence * 100).toFixed(0)}%</td>
+            <td>(${e.avg_x.toFixed(0)}, ${e.avg_y.toFixed(0)})</td>
+            <td>${e.avg_speed.toFixed(1)} px/f</td>
+            <td>${e.trajectory_length}</td>
+            <td>${e.clip_path ? `<a href="/clips/${e.clip_path.split('/').pop()}" target="_blank" class="btn btn-small">Play</a>` : '--'}</td>
+        </tr>
+    `).join('');
+}
+
+function closeModal() {
+    document.getElementById('clip-modal').style.display = 'none';
+    document.getElementById('clip-player').pause();
+}
+</script>
+{% endblock %}

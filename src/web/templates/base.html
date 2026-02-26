@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Aerial Detection{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">Aerial Object Detection</div>
+        <div class="nav-links">
+            <a href="/" class="nav-link{% if request.url.path == '/' %} active{% endif %}">Dashboard</a>
+            <a href="/history" class="nav-link{% if request.url.path == '/history' %} active{% endif %}">History</a>
+            <a href="/settings" class="nav-link{% if request.url.path == '/settings' %} active{% endif %}">Settings</a>
+        </div>
+        <div class="nav-status">
+            <span id="connection-status" class="status-indicator offline">Disconnected</span>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

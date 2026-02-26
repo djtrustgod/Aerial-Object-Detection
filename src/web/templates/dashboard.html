@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Aerial Detection{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <!-- Live Stream -->
+    <div class="card stream-card">
+        <div class="card-header">
+            <h2>Live Stream</h2>
+            <div class="stream-controls">
+                <span id="stream-fps" class="badge">-- FPS</span>
+                <span id="stream-tracks" class="badge">0 tracks</span>
+            </div>
+        </div>
+        <div class="card-body">
+            <canvas id="stream-canvas" width="640" height="360"></canvas>
+            <div id="stream-offline" class="stream-overlay" style="display:none;">
+                <p>Stream Offline</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Detections -->
+    <div class="card detections-card">
+        <div class="card-header">
+            <h2>Active Detections</h2>
+        </div>
+        <div class="card-body">
+            <div id="active-detections" class="detection-list">
+                <p class="empty-state">No active detections</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Event Feed -->
+    <div class="card events-card">
+        <div class="card-header">
+            <h2>Recent Events</h2>
+        </div>
+        <div class="card-body">
+            <div id="event-feed" class="event-list">
+                <p class="empty-state">Waiting for events...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Chart -->
+    <div class="card chart-card">
+        <div class="card-header">
+            <h2>Detection Statistics</h2>
+        </div>
+        <div class="card-body">
+            <canvas id="stats-chart" height="200"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}

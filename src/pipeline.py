@@ -1,0 +1,321 @@
+"""Pipeline orchestrator: capture → detect → track → classify → record."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import threading
+import time
+from collections import deque
+from typing import Any, Callable
+
+import cv2
+import numpy as np
+
+from src.config import AppConfig
+from src.capture.stream import FrameGrabber
+from src.processing.preprocessor import Preprocessor
+from src.processing.detector import Detector
+from src.processing.tracker import CentroidTracker
+from src.processing.classifier import Classifier
+from src.recording.clip_writer import ClipWriter
+from src.recording.event_logger import EventLogger
+from src.recording.models import DetectionEvent, ObjectClass, TrackedObject
+
+logger = logging.getLogger(__name__)
+
+
+class Pipeline:
+    """Main processing pipeline orchestrator."""
+
+    def __init__(self, config: AppConfig):
+        self._config = config
+        self._running = False
+        self._thread: threading.Thread | None = None
+
+        # Components
+        self._grabber = FrameGrabber(
+            url=config.capture.rtsp_url,
+            reconnect_delay=config.capture.reconnect_delay,
+            grab_timeout=config.capture.grab_timeout,
+        )
+        self._preprocessor = Preprocessor(config.processing)
+        self._detector = Detector(config.detection)
+        self._tracker = CentroidTracker(config.tracking)
+        self._classifier = Classifier(config.classification)
+        self._clip_writer = ClipWriter(
+            clip_dir=config.recording.clip_dir,
+            pre_buffer_seconds=config.recording.clip_pre_buffer,
+            post_buffer_seconds=config.recording.clip_post_buffer,
+        )
+        self._event_logger = EventLogger(config.recording.db_path)
+
+        # Display frame (with overlays)
+        self._display_frame: np.ndarray | None = None
+        self._display_lock = threading.Lock()
+
+        # Event subscribers (for WebSocket push)
+        self._event_callbacks: list[Callable] = []
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+        # Stats
+        self._frame_count = 0
+        self._fps_actual = 0.0
+        self._active_tracks = 0
+
+        # Track completion tracking
+        self._prev_track_ids: set[int] = set()
+
+    @property
+    def display_frame(self) -> np.ndarray | None:
+        with self._display_lock:
+            if self._display_frame is not None:
+                return self._display_frame.copy()
+            return None
+
+    @property
+    def stats(self) -> dict[str, Any]:
+        return {
+            "fps": round(self._fps_actual, 1),
+            "frame_count": self._frame_count,
+            "active_tracks": self._active_tracks,
+            "connected": self._grabber.is_connected,
+        }
+
+    @property
+    def config(self) -> AppConfig:
+        return self._config
+
+    @property
+    def event_logger(self) -> EventLogger:
+        return self._event_logger
+
+    def set_event_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Set the asyncio event loop for thread-safe callbacks."""
+        self._loop = loop
+
+    def add_event_callback(self, callback: Callable) -> None:
+        """Register a callback for detection events."""
+        self._event_callbacks.append(callback)
+
+    def start(self) -> None:
+        """Start the pipeline (grabber + processing thread)."""
+        if self._running:
+            return
+        self._running = True
+        self._grabber.start()
+        self._thread = threading.Thread(target=self._process_loop, daemon=True)
+        self._thread.start()
+        logger.info("Pipeline started")
+
+    def stop(self) -> None:
+        """Stop the pipeline gracefully."""
+        self._running = False
+        if self._thread is not None:
+            self._thread.join(timeout=10.0)
+            self._thread = None
+        self._grabber.stop()
+        self._clip_writer.flush()
+        self._event_logger.close()
+        logger.info("Pipeline stopped")
+
+    def update_detection_config(self, **kwargs: Any) -> None:
+        """Update detection parameters at runtime."""
+        for key, value in kwargs.items():
+            if hasattr(self._config.detection, key):
+                setattr(self._config.detection, key, value)
+        # Rebuild detector with new config
+        self._detector = Detector(self._config.detection)
+        logger.info("Detection config updated: %s", kwargs)
+
+    def update_tracking_config(self, **kwargs: Any) -> None:
+        """Update tracking parameters at runtime."""
+        for key, value in kwargs.items():
+            if hasattr(self._config.tracking, key):
+                setattr(self._config.tracking, key, value)
+
+    def _process_loop(self) -> None:
+        """Main processing loop running in a background thread."""
+        frame_skip = self._config.processing.frame_skip
+        skip_counter = 0
+        fps_timer = time.monotonic()
+        fps_frame_count = 0
+
+        # Set FPS on components once connected
+        fps_set = False
+
+        while self._running:
+            frame, frame_num = self._grabber.get_frame()
+            if frame is None:
+                time.sleep(0.01)
+                continue
+
+            # Set FPS from stream on first frame
+            if not fps_set and self._grabber.is_connected:
+                stream_fps = self._grabber.fps
+                self._classifier.fps = stream_fps
+                self._clip_writer.fps = stream_fps
+                fps_set = True
+
+            # Frame skipping
+            skip_counter += 1
+            if skip_counter % frame_skip != 0:
+                # Still feed the clip writer for continuous recording
+                display = self._preprocessor.resize_only(frame)
+                self._clip_writer.feed_frame(display)
+                continue
+
+            self._frame_count += 1
+            timestamp = time.time()
+
+            # Preprocess
+            gray = self._preprocessor.process(frame)
+            display = self._preprocessor.resize_only(frame)
+
+            # Detect
+            detections = self._detector.detect(gray, frame_num, timestamp)
+
+            # Track
+            tracks = self._tracker.update(detections)
+            self._active_tracks = len(tracks)
+
+            # Classify mature tracks
+            mature = self._tracker.mature_objects
+            for oid, obj in mature.items():
+                cls, conf = self._classifier.classify(obj)
+                obj.classification = cls
+                obj.confidence = conf
+
+            # Check for completed tracks (were active, now gone)
+            current_ids = set(tracks.keys())
+            completed_ids = self._prev_track_ids - current_ids
+            for oid in completed_ids:
+                # These objects have been dropped — would need to cache them
+                # for event logging. For simplicity, we log events for
+                # mature tracks that are still active.
+                pass
+            self._prev_track_ids = current_ids
+
+            # Record & log for mature tracks
+            has_detections = len(mature) > 0
+            if has_detections:
+                clip_path = self._clip_writer.trigger_recording()
+                for oid, obj in mature.items():
+                    if obj.classification != ObjectClass.UNKNOWN:
+                        self._publish_event(obj, clip_path)
+
+            # Feed clip writer
+            self._clip_writer.feed_frame(display)
+
+            # Draw overlays on display frame
+            annotated = self._draw_overlays(display, tracks)
+            with self._display_lock:
+                self._display_frame = annotated
+
+            # FPS calculation
+            fps_frame_count += 1
+            elapsed = time.monotonic() - fps_timer
+            if elapsed >= 1.0:
+                self._fps_actual = fps_frame_count / elapsed
+                fps_frame_count = 0
+                fps_timer = time.monotonic()
+
+    def _draw_overlays(self, frame: np.ndarray,
+                       tracks: dict[int, TrackedObject]) -> np.ndarray:
+        """Draw bounding boxes, IDs, and classification labels."""
+        annotated = frame.copy()
+
+        color_map = {
+            ObjectClass.AIRCRAFT: (0, 255, 0),    # Green
+            ObjectClass.SATELLITE: (255, 255, 0),  # Cyan
+            ObjectClass.UAP: (0, 0, 255),          # Red
+            ObjectClass.UNKNOWN: (128, 128, 128),  # Gray
+        }
+
+        for oid, obj in tracks.items():
+            cx, cy = obj.centroid
+            color = color_map.get(obj.classification, (128, 128, 128))
+
+            # Draw crosshair
+            cv2.drawMarker(annotated, (cx, cy), color,
+                           cv2.MARKER_CROSS, 15, 1)
+
+            # Draw trajectory
+            if len(obj.positions) >= 2:
+                pts = np.array(obj.positions, dtype=np.int32)
+                cv2.polylines(annotated, [pts], False, color, 1)
+
+            # Label
+            label = f"#{oid} {obj.classification.value}"
+            if obj.confidence > 0:
+                label += f" {obj.confidence:.0%}"
+            cv2.putText(annotated, label, (cx + 10, cy - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+
+        # HUD overlay
+        cv2.putText(annotated, f"FPS: {self._fps_actual:.1f}",
+                    (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        cv2.putText(annotated, f"Tracks: {self._active_tracks}",
+                    (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+        return annotated
+
+    def _publish_event(self, obj: TrackedObject,
+                       clip_path: str | None) -> None:
+        """Publish a detection event to callbacks and log to DB."""
+        positions = obj.positions
+        if not positions:
+            return
+
+        avg_x = float(np.mean([p[0] for p in positions]))
+        avg_y = float(np.mean([p[1] for p in positions]))
+        speeds = []
+        for i in range(1, len(positions)):
+            dx = positions[i][0] - positions[i - 1][0]
+            dy = positions[i][1] - positions[i - 1][1]
+            speeds.append((dx ** 2 + dy ** 2) ** 0.5)
+        avg_speed = float(np.mean(speeds)) if speeds else 0.0
+
+        event = DetectionEvent(
+            object_id=obj.object_id,
+            classification=obj.classification,
+            confidence=obj.confidence,
+            start_time=time.time(),
+            end_time=time.time(),
+            start_frame=obj.frame_history[0] if obj.frame_history else 0,
+            end_frame=obj.frame_history[-1] if obj.frame_history else 0,
+            avg_x=avg_x,
+            avg_y=avg_y,
+            avg_speed=avg_speed,
+            trajectory_length=len(positions),
+            clip_path=clip_path,
+        )
+
+        # Log to DB (deduplicate by object_id — only log once per track)
+        if not hasattr(self, '_logged_ids'):
+            self._logged_ids: set[int] = set()
+        if obj.object_id not in self._logged_ids:
+            self._logged_ids.add(obj.object_id)
+            event.event_id = self._event_logger.log_event(event)
+
+        # Publish to WebSocket subscribers
+        event_data = {
+            "type": "detection",
+            "event_id": event.event_id,
+            "object_id": event.object_id,
+            "classification": event.classification.value,
+            "confidence": event.confidence,
+            "x": avg_x,
+            "y": avg_y,
+            "speed": avg_speed,
+            "trajectory_length": len(positions),
+        }
+
+        for callback in self._event_callbacks:
+            try:
+                if self._loop is not None:
+                    self._loop.call_soon_threadsafe(callback, event_data)
+                else:
+                    callback(event_data)
+            except Exception:
+                logger.exception("Error in event callback")

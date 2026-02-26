@@ -1,0 +1,60 @@
+capture:
+  rtsp_url: "rtsp://user:pass@192.168.1.100:554/stream1"
+  reconnect_delay: 5.0       # seconds between reconnection attempts
+  grab_timeout: 10.0         # seconds before treating stream as dead
+
+processing:
+  resize_width: 640
+  resize_height: 360
+  clahe_clip_limit: 2.0
+  clahe_grid_size: 8
+  blur_kernel: 5
+  frame_skip: 2              # process every Nth frame
+
+detection:
+  # Frame differencing
+  diff_threshold: 25
+  # MOG2 background subtractor
+  mog2_history: 500
+  mog2_var_threshold: 40
+  mog2_detect_shadows: false
+  # Morphology
+  morph_kernel_size: 3
+  morph_erode_iterations: 1
+  morph_dilate_iterations: 2
+  # Contour filtering
+  min_contour_area: 4        # pixels²
+  max_contour_area: 500      # pixels²
+  min_circularity: 0.3
+
+tracking:
+  max_distance: 50           # max pixel distance for centroid matching
+  max_disappeared: 15        # frames before dropping track
+  min_track_length: 5        # minimum frames to consider a valid track
+
+classification:
+  # FFT blink detection
+  blink_freq_low: 0.5        # Hz
+  blink_freq_high: 3.0       # Hz
+  blink_power_threshold: 0.3 # normalized FFT power to declare "blinking"
+  # Trajectory linearity (R² from polyfit)
+  linearity_threshold: 0.85  # above = satellite-like
+  # Speed thresholds (pixels/frame at processing resolution)
+  satellite_speed_min: 1.0
+  satellite_speed_max: 8.0
+  # UAP scoring
+  acceleration_var_threshold: 2.0  # high accel variance = erratic
+
+recording:
+  clip_pre_buffer: 3.0       # seconds of pre-event buffer
+  clip_post_buffer: 5.0      # seconds of post-event recording
+  clip_dir: "data/clips"
+  db_path: "data/db/detections.db"
+  log_dir: "data/logs"
+  jpeg_quality: 70
+
+web:
+  host: "0.0.0.0"
+  port: 8080
+  stream_fps: 10             # max MJPEG WebSocket FPS
+  stream_quality: 70         # JPEG quality for WebSocket stream
