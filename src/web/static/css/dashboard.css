@@ -380,6 +380,15 @@ body {
     margin-top: 2rem;
 }
 
+.site-footer a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.site-footer a:hover {
+    text-decoration: underline;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .dashboard-grid {
