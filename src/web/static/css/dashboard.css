@@ -370,6 +370,16 @@ body {
     border-radius: 3px;
 }
 
+/* Footer */
+.site-footer {
+    text-align: center;
+    padding: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .dashboard-grid {
