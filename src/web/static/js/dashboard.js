@@ -192,15 +192,41 @@ async function pollStats() {
         const tracksEl = document.getElementById('stream-tracks');
         if (fpsEl) fpsEl.textContent = `${stats.fps} FPS`;
         if (tracksEl) tracksEl.textContent = `${stats.active_tracks} tracks`;
-    } catch (e) {}
+        updateCameraStatus(stats.connected);
+    } catch (e) {
+        updateCameraStatus(false);
+    }
 }
 
 // --- Connection Status ---
-function updateConnectionStatus(online) {
+// Track both WebSocket and camera states independently
+let wsConnected = false;
+let cameraConnected = false;
+
+function updateConnectionStatus(wsOnline) {
+    wsConnected = wsOnline;
+    renderConnectionStatus();
+}
+
+function updateCameraStatus(camOnline) {
+    cameraConnected = camOnline;
+    renderConnectionStatus();
+}
+
+function renderConnectionStatus() {
     const el = document.getElementById('connection-status');
     if (!el) return;
-    el.textContent = online ? 'Connected' : 'Disconnected';
-    el.className = `status-indicator ${online ? 'online' : 'offline'}`;
+
+    if (!wsConnected) {
+        el.textContent = 'Server Offline';
+        el.className = 'status-indicator offline';
+    } else if (!cameraConnected) {
+        el.textContent = 'No Camera';
+        el.className = 'status-indicator offline';
+    } else {
+        el.textContent = 'Camera Connected';
+        el.className = 'status-indicator online';
+    }
 }
 
 function scheduleReconnect() {

@@ -73,6 +73,18 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
     async def api_event_stats():
         return JSONResponse(pipeline.event_logger.get_stats())
 
+    @router.post("/api/settings/general")
+    async def api_update_general(request: Request):
+        body = await request.json()
+        updated = {}
+        if "rtsp_url" in body:
+            pipeline.config.capture.rtsp_url = body["rtsp_url"]
+            updated["rtsp_url"] = body["rtsp_url"]
+        if "clip_dir" in body:
+            pipeline.config.recording.clip_dir = body["clip_dir"]
+            updated["clip_dir"] = body["clip_dir"]
+        return JSONResponse({"status": "ok", "updated": updated})
+
     @router.post("/api/settings/detection")
     async def api_update_detection(request: Request):
         body = await request.json()

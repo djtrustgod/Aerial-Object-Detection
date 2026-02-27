@@ -4,6 +4,27 @@
 
 {% block content %}
 <div class="settings-grid">
+    <!-- General Settings -->
+    <div class="card">
+        <div class="card-header">
+            <h2>General</h2>
+        </div>
+        <div class="card-body">
+            <form id="general-form" onsubmit="return saveGeneral(event)">
+                <div class="form-group">
+                    <label>RTSP Camera Address</label>
+                    <input type="text" name="rtsp_url" value="{{ config.capture.rtsp_url }}" placeholder="rtsp://user:pass@host:554/stream">
+                </div>
+                <div class="form-group">
+                    <label>Capture Save Directory</label>
+                    <input type="text" name="clip_dir" value="{{ config.recording.clip_dir }}" placeholder="data/clips">
+                </div>
+                <button type="submit" class="btn">Apply</button>
+                <span id="general-status" class="save-status"></span>
+            </form>
+        </div>
+    </div>
+
     <!-- Detection Settings -->
     <div class="card">
         <div class="card-header">
@@ -89,6 +110,22 @@
 
 {% block scripts %}
 <script>
+async function saveGeneral(e) {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const body = Object.fromEntries(form.entries());
+    const resp = await fetch('/api/settings/general', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+    });
+    const result = await resp.json();
+    const status = document.getElementById('general-status');
+    status.textContent = result.status === 'ok' ? 'Saved!' : 'Error';
+    setTimeout(() => status.textContent = '', 2000);
+    return false;
+}
+
 async function saveDetection(e) {
     e.preventDefault();
     const form = new FormData(e.target);
@@ -129,7 +166,14 @@ async function updateStats() {
         document.getElementById('sys-fps').textContent = stats.fps;
         document.getElementById('sys-tracks').textContent = stats.active_tracks;
         document.getElementById('sys-frames').textContent = stats.frame_count;
-        document.getElementById('sys-connected').textContent = stats.connected ? 'Connected' : 'Disconnected';
+        const camStatus = stats.connected;
+        document.getElementById('sys-connected').textContent = camStatus ? 'Connected' : 'Disconnected';
+        // Update navbar indicator
+        const navEl = document.getElementById('connection-status');
+        if (navEl) {
+            navEl.textContent = camStatus ? 'Camera Connected' : 'No Camera';
+            navEl.className = `status-indicator ${camStatus ? 'online' : 'offline'}`;
+        }
     } catch (e) {}
 }
 setInterval(updateStats, 2000);
