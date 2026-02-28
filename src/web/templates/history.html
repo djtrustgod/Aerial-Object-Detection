@@ -36,7 +36,7 @@
                 {% for event in events %}
                 <tr class="event-row classification-{{ event.classification.value }}">
                     <td>{{ event.event_id }}</td>
-                    <td>{{ "%.1f"|format(event.start_time) }}</td>
+                    <td>{{ event.start_time | format_ts }}</td>
                     <td><span class="class-badge {{ event.classification.value }}">{{ event.classification.value }}</span></td>
                     <td>{{ "%.0f"|format(event.confidence * 100) }}%</td>
                     <td>({{ "%.0f"|format(event.avg_x) }}, {{ "%.0f"|format(event.avg_y) }})</td>
@@ -44,7 +44,7 @@
                     <td>{{ event.trajectory_length }}</td>
                     <td>
                         {% if event.clip_path %}
-                        <a href="/clips/{{ event.clip_path.split('/')[-1] }}" target="_blank" class="btn btn-small">Play</a>
+                        <a href="/clips/{{ event.clip_path | basename }}" target="_blank" class="btn btn-small">Play</a>
                         {% else %}
                         --
                         {% endif %}
@@ -116,13 +116,13 @@ function renderTable(events) {
     tbody.innerHTML = events.map(e => `
         <tr class="event-row classification-${e.classification}">
             <td>${e.event_id || '--'}</td>
-            <td>${new Date(e.start_time * 1000).toLocaleTimeString()}</td>
+            <td>${new Date(e.start_time * 1000).toLocaleString('en-US', {month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true})}</td>
             <td><span class="class-badge ${e.classification}">${e.classification}</span></td>
             <td>${(e.confidence * 100).toFixed(0)}%</td>
             <td>(${e.avg_x.toFixed(0)}, ${e.avg_y.toFixed(0)})</td>
             <td>${e.avg_speed.toFixed(1)} px/f</td>
             <td>${e.trajectory_length}</td>
-            <td>${e.clip_path ? `<a href="/clips/${e.clip_path.split('/').pop()}" target="_blank" class="btn btn-small">Play</a>` : '--'}</td>
+            <td>${e.clip_path ? `<a href="/clips/${e.clip_path.replace(/\\/g, '/').split('/').pop()}" target="_blank" class="btn btn-small">Play</a>` : '--'}</td>
         </tr>
     `).join('');
 }

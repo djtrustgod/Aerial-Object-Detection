@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -25,6 +26,8 @@ def create_app(pipeline: Pipeline) -> FastAPI:
 
     # Templates
     templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+    templates.env.filters["basename"] = lambda p: Path(str(p)).name
+    templates.env.filters["format_ts"] = lambda ts: datetime.fromtimestamp(float(ts)).strftime("%b %d, %Y %I:%M %p")
 
     # Routes
     app.include_router(create_router(pipeline, templates))
