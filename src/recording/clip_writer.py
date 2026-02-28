@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 import cv2
+import imageio
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -104,25 +105,26 @@ class ClipWriter:
 
     @staticmethod
     def _write_clip(frames: list[np.ndarray], path: str) -> None:
-        """Write frames to an MP4 file (runs in a background thread)."""
+        """Write frames to an H.264 MP4 file (runs in a background thread)."""
         if not frames:
             return
 
-        h, w = frames[0].shape[:2]
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        fps = 15.0  # Write at a reasonable playback FPS
-
-        writer = cv2.VideoWriter(path, fourcc, fps, (w, h))
+        writer = imageio.get_writer(
+            path, fps=15,
+            codec="libx264",
+            output_params=["-crf", "28", "-preset", "ultrafast", "-pix_fmt", "yuv420p"],
+        )
         try:
             for frame in frames:
                 if len(frame.shape) == 2:
                     frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-                writer.write(frame)
+                # imageio expects RGB; OpenCV uses BGR
+                writer.append_data(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             logger.info("Saved clip: %s (%d frames)", path, len(frames))
         except Exception:
             logger.exception("Error writing clip: %s", path)
         finally:
-            writer.release()
+            writer.close()
 
     def flush(self) -> None:
         """Force-finish any in-progress recording."""
