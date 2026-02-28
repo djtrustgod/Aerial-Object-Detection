@@ -78,6 +78,13 @@ class WebConfig:
 
 
 @dataclass
+class ScheduleConfig:
+    enabled: bool = False
+    start_time: str = "20:00"   # HH:MM, 24-hour
+    end_time: str = "06:00"     # HH:MM, 24-hour (overnight window by default)
+
+
+@dataclass
 class AppConfig:
     capture: CaptureConfig = field(default_factory=CaptureConfig)
     processing: ProcessingConfig = field(default_factory=ProcessingConfig)
@@ -86,6 +93,7 @@ class AppConfig:
     classification: ClassificationConfig = field(default_factory=ClassificationConfig)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
     web: WebConfig = field(default_factory=WebConfig)
+    schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
 
 
 def _apply_dict(dc: object, data: dict) -> None:
@@ -115,6 +123,7 @@ def load_config(path: str | Path | None = None) -> AppConfig:
             "classification": config.classification,
             "recording": config.recording,
             "web": config.web,
+            "schedule": config.schedule,
         }
 
         for section_name, dc_instance in section_map.items():

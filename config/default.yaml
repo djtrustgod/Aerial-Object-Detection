@@ -1,5 +1,5 @@
 capture:
-  rtsp_url: "rtsp://JoeChip:Runciter2024@192.168.145.8/stream1"
+  rtsp_url: "rtsp://JoeChip:Runciter2024@192.168.145.3/stream1"
   reconnect_delay: 5.0       # How long to wait (seconds) before retrying a lost camera connection
   grab_timeout: 10.0         # How long to wait (seconds) with no new frames before reconnecting
 
@@ -57,3 +57,8 @@ web:
   port: 8080                 # Port the web dashboard runs on
   stream_fps: 10             # Maximum frames per second delivered to the live stream preview
   stream_quality: 70         # Image quality for the live stream preview (1–100)
+
+schedule:
+  enabled: false             # When true, detection only runs within the time window below
+  start_time: "20:00"        # Detection begins at this time each day (HH:MM, 24-hour)
+  end_time: "06:00"          # Detection ends at this time (set earlier than start for overnight window)

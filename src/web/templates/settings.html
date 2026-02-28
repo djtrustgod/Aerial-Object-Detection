@@ -317,6 +317,35 @@
         </div>
     </div>
 
+    <!-- Detection Schedule -->
+    <div class="card">
+        <div class="card-header"><h2>Detection Schedule</h2></div>
+        <div class="card-body">
+            <form id="schedule-form" onsubmit="return saveSection(event, '/api/settings/schedule', 'schedule-status')">
+                <div class="form-group">
+                    <label>Enable Scheduling</label>
+                    <small class="field-hint">When off, detection always runs. When on, detection only runs within the time window below.</small>
+                    <select name="enabled">
+                        <option value="false" {% if not config.schedule.enabled %}selected{% endif %}>Disabled (always detect)</option>
+                        <option value="true"  {% if config.schedule.enabled %}selected{% endif %}>Enabled (use time window)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Start Time (24h)</label>
+                    <small class="field-hint">Detection begins at this time each day (e.g. 20:00 for 8 PM)</small>
+                    <input type="time" name="start_time" value="{{ config.schedule.start_time }}">
+                </div>
+                <div class="form-group">
+                    <label>End Time (24h)</label>
+                    <small class="field-hint">Detection ends at this time. Set earlier than start for an overnight window (e.g. 06:00).</small>
+                    <input type="time" name="end_time" value="{{ config.schedule.end_time }}">
+                </div>
+                <button type="submit" class="btn">Apply</button>
+                <span id="schedule-status" class="save-status"></span>
+            </form>
+        </div>
+    </div>
+
     <!-- System Info -->
     <div class="card">
         <div class="card-header"><h2>System Info</h2></div>

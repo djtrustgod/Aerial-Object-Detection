@@ -8,6 +8,7 @@ import logging
 import time
 
 import cv2
+import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from src.pipeline import Pipeline
@@ -77,7 +78,15 @@ def create_ws_router(pipeline: Pipeline) -> APIRouter:
         try:
             while True:
                 frame = pipeline.display_frame
-                if frame is not None:
+                if frame is None:
+                    # Send a placeholder when disconnected/reconnecting
+                    placeholder = np.zeros((360, 640, 3), dtype=np.uint8)
+                    cv2.putText(placeholder, "Connecting...", (220, 190),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 200, 0), 2)
+                    _, buffer = cv2.imencode(".jpg", placeholder,
+                                            [cv2.IMWRITE_JPEG_QUALITY, 70])
+                    await ws.send_bytes(buffer.tobytes())
+                else:
                     _, buffer = cv2.imencode(
                         ".jpg", frame,
                         [cv2.IMWRITE_JPEG_QUALITY, quality]

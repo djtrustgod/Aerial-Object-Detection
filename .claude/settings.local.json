@@ -6,7 +6,10 @@
       "Bash(pip install:*)",
       "Bash(python:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(netstat:*)",
+      "Bash(powershell:*)",
+      "Bash(curl:*)"
     ]
   }
 }

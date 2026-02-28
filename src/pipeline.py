@@ -7,6 +7,7 @@ import logging
 import threading
 import time
 from collections import deque
+from datetime import datetime
 from typing import Any, Callable
 
 import cv2
@@ -84,6 +85,8 @@ class Pipeline:
             "frame_count": self._frame_count,
             "active_tracks": self._active_tracks,
             "connected": self._grabber.is_connected,
+            "detection_active": self._is_in_schedule(),
+            "schedule_enabled": self._config.schedule.enabled,
         }
 
     @property
@@ -185,6 +188,24 @@ class Pipeline:
             if hasattr(self._config.tracking, key):
                 setattr(self._config.tracking, key, value)
 
+    def update_schedule_config(self, **kwargs: Any) -> None:
+        """Update schedule parameters at runtime."""
+        for key, value in kwargs.items():
+            if hasattr(self._config.schedule, key):
+                setattr(self._config.schedule, key, value)
+
+    def _is_in_schedule(self) -> bool:
+        """Return True if detection should run now (always True when scheduling is off)."""
+        if not self._config.schedule.enabled:
+            return True
+        now = datetime.now().time()
+        start = datetime.strptime(self._config.schedule.start_time, "%H:%M").time()
+        end = datetime.strptime(self._config.schedule.end_time, "%H:%M").time()
+        if start <= end:            # same-day window e.g. 09:00–17:00
+            return start <= now <= end
+        else:                       # overnight window e.g. 20:00–06:00
+            return now >= start or now <= end
+
     def _process_loop(self) -> None:
         """Main processing loop running in a background thread."""
         frame_skip = self._config.processing.frame_skip
@@ -217,6 +238,7 @@ class Pipeline:
             if skip_counter % frame_skip != 0:
                 # Still feed the clip writer for continuous recording
                 display = self._preprocessor.resize_only(frame)
+                self._stamp_timestamp(display)
                 self._clip_writer.feed_frame(display)
                 continue
 
@@ -227,43 +249,43 @@ class Pipeline:
             gray = self._preprocessor.process(frame)
             display = self._preprocessor.resize_only(frame)
 
-            # Detect
-            detections = self._detector.detect(gray, frame_num, timestamp)
+            # Detect (gated by schedule)
+            in_schedule = self._is_in_schedule()
 
-            # Track
+            if in_schedule:
+                detections = self._detector.detect(gray, frame_num, timestamp)
+            else:
+                detections = []
+
+            # Track (empty list ages out stale tracks naturally)
             tracks = self._tracker.update(detections)
             self._active_tracks = len(tracks)
 
-            # Classify mature tracks
-            mature = self._tracker.mature_objects
-            for oid, obj in mature.items():
-                cls, conf = self._classifier.classify(obj)
-                obj.classification = cls
-                obj.confidence = conf
-
-            # Check for completed tracks (were active, now gone)
-            current_ids = set(tracks.keys())
-            completed_ids = self._prev_track_ids - current_ids
-            for oid in completed_ids:
-                # These objects have been dropped — would need to cache them
-                # for event logging. For simplicity, we log events for
-                # mature tracks that are still active.
-                pass
-            self._prev_track_ids = current_ids
-
-            # Record & log for mature tracks
-            has_detections = len(mature) > 0
-            if has_detections:
-                clip_path = self._clip_writer.trigger_recording()
+            if in_schedule:
+                # Classify mature tracks
+                mature = self._tracker.mature_objects
                 for oid, obj in mature.items():
-                    if obj.classification != ObjectClass.UNKNOWN:
-                        self._publish_event(obj, clip_path)
+                    cls, conf = self._classifier.classify(obj)
+                    obj.classification = cls
+                    obj.confidence = conf
 
-            # Feed clip writer
-            self._clip_writer.feed_frame(display)
+                # Check for completed tracks (were active, now gone)
+                current_ids = set(tracks.keys())
+                self._prev_track_ids = current_ids
 
-            # Draw overlays on display frame
+                # Record & log for mature tracks
+                has_detections = len(mature) > 0
+                if has_detections:
+                    clip_path = self._clip_writer.trigger_recording()
+                    for oid, obj in mature.items():
+                        if obj.classification != ObjectClass.UNKNOWN:
+                            self._publish_event(obj, clip_path)
+
+            # Draw overlays on display frame (includes timestamp)
             annotated = self._draw_overlays(display, tracks)
+
+            # Feed clip writer with annotated frame
+            self._clip_writer.feed_frame(annotated)
             with self._display_lock:
                 # Discard if URL changed while this frame was being processed
                 if self._url_version == url_ver:
@@ -315,7 +337,14 @@ class Pipeline:
         cv2.putText(annotated, f"Tracks: {self._active_tracks}",
                     (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
+        self._stamp_timestamp(annotated)
         return annotated
+
+    def _stamp_timestamp(self, frame: np.ndarray) -> None:
+        """Draw current date/time onto frame in-place (bottom-left)."""
+        ts = datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
+        cv2.putText(frame, ts, (10, frame.shape[0] - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
 
     def _publish_event(self, obj: TrackedObject,
                        clip_path: str | None) -> None:

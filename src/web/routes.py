@@ -177,4 +177,12 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
         pipeline.persist_config_values(typed)
         return JSONResponse({"status": "ok", "updated": typed})
 
+    @router.post("/api/settings/schedule")
+    async def api_update_schedule(request: Request):
+        body = await request.json()
+        typed = _typed_dict(pipeline.config.schedule, body)
+        pipeline.update_schedule_config(**typed)
+        pipeline.persist_config_values(typed)
+        return JSONResponse({"status": "ok", "updated": typed})
+
     return router

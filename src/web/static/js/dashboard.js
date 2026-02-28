@@ -193,6 +193,20 @@ async function pollStats() {
         if (fpsEl) fpsEl.textContent = `${stats.fps} FPS`;
         if (tracksEl) tracksEl.textContent = `${stats.active_tracks} tracks`;
         updateCameraStatus(stats.connected);
+
+        const detEl = document.getElementById('detection-status');
+        if (detEl) {
+            if (!stats.schedule_enabled) {
+                detEl.textContent = 'Detection On';
+                detEl.className = 'badge';
+            } else if (stats.detection_active) {
+                detEl.textContent = 'Detection Active';
+                detEl.className = 'badge detection-on';
+            } else {
+                detEl.textContent = 'Detection Scheduled';
+                detEl.className = 'badge detection-off';
+            }
+        }
     } catch (e) {
         updateCameraStatus(false);
     }
