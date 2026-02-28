@@ -15,6 +15,7 @@
                 <option value="unknown">Unknown</option>
             </select>
             <button class="btn" onclick="refreshHistory()">Refresh</button>
+            <button class="btn btn-danger" onclick="clearHistory()">Clear History</button>
         </div>
     </div>
     <div class="card-body">
@@ -67,8 +68,31 @@
 </div>
 {% endblock %}
 
+{% block head %}
+<style>
+.btn-danger {
+    background: #8b1a1a;
+    color: #fff;
+    border-color: #8b1a1a;
+}
+.btn-danger:hover {
+    background: #b22222;
+    border-color: #b22222;
+}
+</style>
+{% endblock %}
+
 {% block scripts %}
 <script>
+async function clearHistory() {
+    if (!confirm('Delete all detection history? This cannot be undone.')) return;
+    const resp = await fetch('/api/events', { method: 'DELETE' });
+    const result = await resp.json();
+    if (result.status === 'ok') {
+        renderTable([]);
+    }
+}
+
 async function filterEvents() {
     const cls = document.getElementById('class-filter').value;
     const url = cls ? `/api/events?classification=${cls}` : '/api/events';

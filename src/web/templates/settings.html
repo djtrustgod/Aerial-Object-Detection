@@ -2,63 +2,172 @@
 
 {% block title %}Settings - Aerial Detection{% endblock %}
 
+{% block head %}
+<style>
+.field-hint {
+    display: block;
+    font-size: 0.78rem;
+    color: #8a9bb5;
+    margin-top: 2px;
+    margin-bottom: 6px;
+    line-height: 1.35;
+}
+.restart-note {
+    color: #e0a040;
+    font-style: italic;
+}
+.section-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #5a7090;
+    margin: 14px 0 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #2a3a4a;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="settings-grid">
-    <!-- General Settings -->
+
+    <!-- Camera & Connection -->
     <div class="card">
-        <div class="card-header">
-            <h2>General</h2>
-        </div>
+        <div class="card-header"><h2>Camera &amp; Connection</h2></div>
         <div class="card-body">
-            <form id="general-form" onsubmit="return saveGeneral(event)">
+            <form id="camera-form" onsubmit="return saveSection(event, '/api/settings/general', 'camera-status')">
                 <div class="form-group">
                     <label>RTSP Camera Address</label>
-                    <input type="text" name="rtsp_url" value="{{ config.capture.rtsp_url }}" placeholder="rtsp://user:pass@host:554/stream">
+                    <small class="field-hint">Enter the full camera stream URL (e.g. rtsp://user:pass@192.168.1.100/stream)</small>
+                    <input type="text" name="rtsp_url" value="{{ config.capture.rtsp_url }}" placeholder="rtsp://user:pass@host/stream">
                 </div>
                 <div class="form-group">
-                    <label>Capture Save Directory</label>
+                    <label>Reconnect Delay (seconds)</label>
+                    <small class="field-hint">How long to wait before retrying a lost camera connection</small>
+                    <input type="number" name="reconnect_delay" value="{{ config.capture.reconnect_delay }}" min="1" max="60" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label>Grab Timeout (seconds)</label>
+                    <small class="field-hint">How long to wait with no new frames before reconnecting</small>
+                    <input type="number" name="grab_timeout" value="{{ config.capture.grab_timeout }}" min="1" max="120" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label>Clip Save Folder</label>
+                    <small class="field-hint">Folder where recorded video clips are saved</small>
                     <input type="text" name="clip_dir" value="{{ config.recording.clip_dir }}" placeholder="data/clips">
                 </div>
                 <button type="submit" class="btn">Apply</button>
-                <span id="general-status" class="save-status"></span>
+                <span id="camera-status" class="save-status"></span>
             </form>
         </div>
     </div>
 
-    <!-- Detection Settings -->
+    <!-- Processing -->
     <div class="card">
-        <div class="card-header">
-            <h2>Detection Parameters</h2>
-        </div>
+        <div class="card-header"><h2>Processing</h2></div>
         <div class="card-body">
-            <form id="detection-form" onsubmit="return saveDetection(event)">
+            <form id="processing-form" onsubmit="return saveSection(event, '/api/settings/processing', 'processing-status')">
+                <div class="section-label">Frame Size</div>
                 <div class="form-group">
-                    <label>Diff Threshold</label>
-                    <input type="number" name="diff_threshold" value="{{ config.detection.diff_threshold }}" min="1" max="255">
+                    <label>Resize Width (px) <span class="restart-note">(restart required)</span></label>
+                    <small class="field-hint">Width frames are resized to before processing</small>
+                    <input type="number" name="resize_width" value="{{ config.processing.resize_width }}" min="160" max="1920">
                 </div>
                 <div class="form-group">
-                    <label>MOG2 Var Threshold</label>
+                    <label>Resize Height (px) <span class="restart-note">(restart required)</span></label>
+                    <small class="field-hint">Height frames are resized to before processing</small>
+                    <input type="number" name="resize_height" value="{{ config.processing.resize_height }}" min="120" max="1080">
+                </div>
+                <div class="section-label">Image Enhancement</div>
+                <div class="form-group">
+                    <label>Contrast Boost Strength</label>
+                    <small class="field-hint">Night-vision contrast boost — higher values are more aggressive</small>
+                    <input type="number" name="clahe_clip_limit" value="{{ config.processing.clahe_clip_limit }}" min="0.5" max="10" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label>Contrast Grid Size</label>
+                    <small class="field-hint">Grid size for contrast enhancement — higher values enhance finer detail</small>
+                    <input type="number" name="clahe_grid_size" value="{{ config.processing.clahe_grid_size }}" min="2" max="32">
+                </div>
+                <div class="form-group">
+                    <label>Noise Blur Amount</label>
+                    <small class="field-hint">Blur applied to reduce camera noise before detection (must be an odd number)</small>
+                    <input type="number" name="blur_kernel" value="{{ config.processing.blur_kernel }}" min="1" max="21" step="2">
+                </div>
+                <div class="section-label">Performance</div>
+                <div class="form-group">
+                    <label>Frame Skip <span class="restart-note">(restart required)</span></label>
+                    <small class="field-hint">Analyze every Nth frame — higher values reduce CPU load but slow response time</small>
+                    <input type="number" name="frame_skip" value="{{ config.processing.frame_skip }}" min="1" max="10">
+                </div>
+                <button type="submit" class="btn">Apply</button>
+                <span id="processing-status" class="save-status"></span>
+            </form>
+        </div>
+    </div>
+
+    <!-- Detection -->
+    <div class="card">
+        <div class="card-header"><h2>Detection</h2></div>
+        <div class="card-body">
+            <form id="detection-form" onsubmit="return saveSection(event, '/api/settings/detection', 'detection-status')">
+                <div class="section-label">Motion Detection</div>
+                <div class="form-group">
+                    <label>Motion Sensitivity (0–255)</label>
+                    <small class="field-hint">How different a pixel must be to count as motion — lower values are more sensitive</small>
+                    <input type="number" name="diff_threshold" value="{{ config.detection.diff_threshold }}" min="1" max="255">
+                </div>
+                <div class="section-label">Background Learning</div>
+                <div class="form-group">
+                    <label>Background History (frames)</label>
+                    <small class="field-hint">How many past frames are used to learn what the background looks like</small>
+                    <input type="number" name="mog2_history" value="{{ config.detection.mog2_history }}" min="50" max="2000">
+                </div>
+                <div class="form-group">
+                    <label>Background Sensitivity</label>
+                    <small class="field-hint">How much a pixel must differ from the background to be flagged — lower values are more sensitive</small>
                     <input type="number" name="mog2_var_threshold" value="{{ config.detection.mog2_var_threshold }}" min="1" max="200">
                 </div>
                 <div class="form-group">
-                    <label>Min Contour Area (px²)</label>
-                    <input type="number" name="min_contour_area" value="{{ config.detection.min_contour_area }}" min="1" max="1000">
+                    <label>Exclude Shadows</label>
+                    <small class="field-hint">Whether to detect and exclude shadows — should be off for nighttime sky</small>
+                    <label style="display:flex;align-items:center;gap:8px;font-weight:normal;margin-top:4px;">
+                        <input type="checkbox" name="mog2_detect_shadows" {% if config.detection.mog2_detect_shadows %}checked{% endif %}>
+                        Enable shadow detection
+                    </label>
+                </div>
+                <div class="section-label">Noise Cleanup</div>
+                <div class="form-group">
+                    <label>Noise Filter Size (px)</label>
+                    <small class="field-hint">Size of the filter used to clean up noisy detections</small>
+                    <input type="number" name="morph_kernel_size" value="{{ config.detection.morph_kernel_size }}" min="1" max="11" step="2">
                 </div>
                 <div class="form-group">
-                    <label>Max Contour Area (px²)</label>
-                    <input type="number" name="max_contour_area" value="{{ config.detection.max_contour_area }}" min="10" max="10000">
-                </div>
-                <div class="form-group">
-                    <label>Min Circularity</label>
-                    <input type="number" name="min_circularity" value="{{ config.detection.min_circularity }}" min="0" max="1" step="0.05">
-                </div>
-                <div class="form-group">
-                    <label>Morph Erode Iterations</label>
+                    <label>Shrink Passes</label>
+                    <small class="field-hint">Passes of shrinking applied to remove tiny noise blobs</small>
                     <input type="number" name="morph_erode_iterations" value="{{ config.detection.morph_erode_iterations }}" min="0" max="5">
                 </div>
                 <div class="form-group">
-                    <label>Morph Dilate Iterations</label>
+                    <label>Expand Passes</label>
+                    <small class="field-hint">Passes of expanding applied to fill gaps in detected objects</small>
                     <input type="number" name="morph_dilate_iterations" value="{{ config.detection.morph_dilate_iterations }}" min="0" max="5">
+                </div>
+                <div class="section-label">Object Size Filtering</div>
+                <div class="form-group">
+                    <label>Min Object Size (px²)</label>
+                    <small class="field-hint">Smallest object size to consider — filters out single-pixel noise</small>
+                    <input type="number" name="min_contour_area" value="{{ config.detection.min_contour_area }}" min="1" max="1000">
+                </div>
+                <div class="form-group">
+                    <label>Max Object Size (px²)</label>
+                    <small class="field-hint">Largest object size to consider — filters out clouds and large artifacts</small>
+                    <input type="number" name="max_contour_area" value="{{ config.detection.max_contour_area }}" min="10" max="10000">
+                </div>
+                <div class="form-group">
+                    <label>Min Roundness (0–1)</label>
+                    <small class="field-hint">How round an object must be — filters out edge streaks and irregular shapes</small>
+                    <input type="number" name="min_circularity" value="{{ config.detection.min_circularity }}" min="0" max="1" step="0.05">
                 </div>
                 <button type="submit" class="btn">Apply</button>
                 <span id="detection-status" class="save-status"></span>
@@ -66,23 +175,24 @@
         </div>
     </div>
 
-    <!-- Tracking Settings -->
+    <!-- Tracking -->
     <div class="card">
-        <div class="card-header">
-            <h2>Tracking Parameters</h2>
-        </div>
+        <div class="card-header"><h2>Tracking</h2></div>
         <div class="card-body">
-            <form id="tracking-form" onsubmit="return saveTracking(event)">
+            <form id="tracking-form" onsubmit="return saveSection(event, '/api/settings/tracking', 'tracking-status')">
                 <div class="form-group">
-                    <label>Max Match Distance (px)</label>
+                    <label>Max Movement Distance (px)</label>
+                    <small class="field-hint">How far an object can move between frames and still be considered the same track</small>
                     <input type="number" name="max_distance" value="{{ config.tracking.max_distance }}" min="5" max="200">
                 </div>
                 <div class="form-group">
-                    <label>Max Disappeared Frames</label>
+                    <label>Max Frames Missing</label>
+                    <small class="field-hint">How many frames an object can go missing before its track is dropped</small>
                     <input type="number" name="max_disappeared" value="{{ config.tracking.max_disappeared }}" min="1" max="100">
                 </div>
                 <div class="form-group">
-                    <label>Min Track Length</label>
+                    <label>Min Track Length (frames)</label>
+                    <small class="field-hint">Minimum frames an object must be tracked before it is reported as a detection</small>
                     <input type="number" name="min_track_length" value="{{ config.tracking.min_track_length }}" min="2" max="50">
                 </div>
                 <button type="submit" class="btn">Apply</button>
@@ -91,11 +201,125 @@
         </div>
     </div>
 
+    <!-- Classification -->
+    <div class="card">
+        <div class="card-header"><h2>Classification</h2></div>
+        <div class="card-body">
+            <form id="classification-form" onsubmit="return saveSection(event, '/api/settings/classification', 'classification-status')">
+                <div class="section-label">Aircraft Detection (Blinking Lights)</div>
+                <div class="form-group">
+                    <label>Min Blink Rate (Hz)</label>
+                    <small class="field-hint">Lowest blink rate to look for — aircraft strobes blink at regular intervals</small>
+                    <input type="number" name="blink_freq_low" value="{{ config.classification.blink_freq_low }}" min="0.1" max="10" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>Max Blink Rate (Hz)</label>
+                    <small class="field-hint">Highest blink rate to look for</small>
+                    <input type="number" name="blink_freq_high" value="{{ config.classification.blink_freq_high }}" min="0.1" max="20" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>Blink Signal Strength (0–1)</label>
+                    <small class="field-hint">How strong the blink signal must be to classify as an aircraft</small>
+                    <input type="number" name="blink_power_threshold" value="{{ config.classification.blink_power_threshold }}" min="0" max="1" step="0.05">
+                </div>
+                <div class="section-label">Satellite Detection (Steady, Straight Path)</div>
+                <div class="form-group">
+                    <label>Path Straightness (0–1)</label>
+                    <small class="field-hint">How straight a path must be to classify as a satellite — higher values require a straighter path</small>
+                    <input type="number" name="linearity_threshold" value="{{ config.classification.linearity_threshold }}" min="0" max="1" step="0.05">
+                </div>
+                <div class="form-group">
+                    <label>Min Satellite Speed (px/frame)</label>
+                    <small class="field-hint">Minimum movement speed for satellite classification</small>
+                    <input type="number" name="satellite_speed_min" value="{{ config.classification.satellite_speed_min }}" min="0.1" max="20" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>Max Satellite Speed (px/frame)</label>
+                    <small class="field-hint">Maximum movement speed for satellite classification</small>
+                    <input type="number" name="satellite_speed_max" value="{{ config.classification.satellite_speed_max }}" min="0.5" max="50" step="0.5">
+                </div>
+                <div class="section-label">Unusual Movement Detection</div>
+                <div class="form-group">
+                    <label>Unusual Motion Threshold</label>
+                    <small class="field-hint">How erratic the acceleration must be before flagging as unusual movement</small>
+                    <input type="number" name="acceleration_var_threshold" value="{{ config.classification.acceleration_var_threshold }}" min="0.1" max="20" step="0.1">
+                </div>
+                <button type="submit" class="btn">Apply</button>
+                <span id="classification-status" class="save-status"></span>
+            </form>
+        </div>
+    </div>
+
+    <!-- Recording -->
+    <div class="card">
+        <div class="card-header"><h2>Recording</h2></div>
+        <div class="card-body">
+            <form id="recording-form" onsubmit="return saveSection(event, '/api/settings/recording', 'recording-status')">
+                <div class="form-group">
+                    <label>Pre-Event Buffer (seconds)</label>
+                    <small class="field-hint">Seconds of footage saved before a detection event begins</small>
+                    <input type="number" name="clip_pre_buffer" value="{{ config.recording.clip_pre_buffer }}" min="0" max="30" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label>Post-Event Buffer (seconds)</label>
+                    <small class="field-hint">Seconds of footage saved after a detection event ends</small>
+                    <input type="number" name="clip_post_buffer" value="{{ config.recording.clip_post_buffer }}" min="0" max="60" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label>Saved Frame Quality (1–100)</label>
+                    <small class="field-hint">Image quality for saved frames — higher values mean better quality but larger files</small>
+                    <input type="number" name="jpeg_quality" value="{{ config.recording.jpeg_quality }}" min="10" max="100">
+                </div>
+                <div class="form-group">
+                    <label>Database Path <span class="restart-note">(restart required)</span></label>
+                    <small class="field-hint">Path to the database file used for logging detection events</small>
+                    <input type="text" name="db_path" value="{{ config.recording.db_path }}" placeholder="data/db/detections.db">
+                </div>
+                <div class="form-group">
+                    <label>Log Folder <span class="restart-note">(restart required)</span></label>
+                    <small class="field-hint">Folder where application log files are written</small>
+                    <input type="text" name="log_dir" value="{{ config.recording.log_dir }}" placeholder="data/logs">
+                </div>
+                <button type="submit" class="btn">Apply</button>
+                <span id="recording-status" class="save-status"></span>
+            </form>
+        </div>
+    </div>
+
+    <!-- Stream & Web -->
+    <div class="card">
+        <div class="card-header"><h2>Stream &amp; Web</h2></div>
+        <div class="card-body">
+            <form id="web-form" onsubmit="return saveSection(event, '/api/settings/web', 'web-status')">
+                <div class="form-group">
+                    <label>Stream Frame Rate (FPS)</label>
+                    <small class="field-hint">Maximum frames per second delivered to the live stream preview</small>
+                    <input type="number" name="stream_fps" value="{{ config.web.stream_fps }}" min="1" max="30">
+                </div>
+                <div class="form-group">
+                    <label>Stream Quality (1–100)</label>
+                    <small class="field-hint">Image quality for the live stream preview — higher values mean better quality</small>
+                    <input type="number" name="stream_quality" value="{{ config.web.stream_quality }}" min="10" max="100">
+                </div>
+                <div class="form-group">
+                    <label>Server Host <span class="restart-note">(restart required)</span></label>
+                    <small class="field-hint">Network address to listen on — 0.0.0.0 makes the dashboard accessible on all interfaces</small>
+                    <input type="text" name="host" value="{{ config.web.host }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Server Port <span class="restart-note">(restart required)</span></label>
+                    <small class="field-hint">Port the web dashboard runs on</small>
+                    <input type="number" name="port" value="{{ config.web.port }}" readonly>
+                </div>
+                <button type="submit" class="btn">Apply</button>
+                <span id="web-status" class="save-status"></span>
+            </form>
+        </div>
+    </div>
+
     <!-- System Info -->
     <div class="card">
-        <div class="card-header">
-            <h2>System Info</h2>
-        </div>
+        <div class="card-header"><h2>System Info</h2></div>
         <div class="card-body">
             <div id="system-info" class="info-grid">
                 <div class="info-item"><span class="info-label">Processing FPS:</span> <span id="sys-fps">--</span></div>
@@ -105,60 +329,49 @@
             </div>
         </div>
     </div>
+
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-async function saveGeneral(e) {
+function collectFormData(form) {
+    const data = {};
+    for (const [key, value] of new FormData(form).entries()) {
+        data[key] = value;
+    }
+    // Checkboxes: unchecked ones are absent from FormData, handle explicitly
+    for (const cb of form.querySelectorAll('input[type=checkbox]')) {
+        data[cb.name] = cb.checked;
+    }
+    // Skip read-only fields
+    for (const el of form.querySelectorAll('input[readonly]')) {
+        delete data[el.name];
+    }
+    return data;
+}
+
+async function saveSection(e, url, statusId) {
     e.preventDefault();
-    const form = new FormData(e.target);
-    const body = Object.fromEntries(form.entries());
-    const resp = await fetch('/api/settings/general', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(body),
-    });
-    const result = await resp.json();
-    const status = document.getElementById('general-status');
-    status.textContent = result.status === 'ok' ? 'Saved!' : 'Error';
-    setTimeout(() => status.textContent = '', 2000);
+    const data = collectFormData(e.target);
+    try {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+        });
+        const result = await resp.json();
+        const status = document.getElementById(statusId);
+        status.textContent = result.status === 'ok' ? 'Saved!' : 'Error saving';
+        setTimeout(() => status.textContent = '', 2500);
+    } catch (err) {
+        const status = document.getElementById(statusId);
+        status.textContent = 'Error';
+        setTimeout(() => status.textContent = '', 2500);
+    }
     return false;
 }
 
-async function saveDetection(e) {
-    e.preventDefault();
-    const form = new FormData(e.target);
-    const body = Object.fromEntries(form.entries());
-    const resp = await fetch('/api/settings/detection', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(body),
-    });
-    const result = await resp.json();
-    const status = document.getElementById('detection-status');
-    status.textContent = result.status === 'ok' ? 'Saved!' : 'Error';
-    setTimeout(() => status.textContent = '', 2000);
-    return false;
-}
-
-async function saveTracking(e) {
-    e.preventDefault();
-    const form = new FormData(e.target);
-    const body = Object.fromEntries(form.entries());
-    const resp = await fetch('/api/settings/tracking', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(body),
-    });
-    const result = await resp.json();
-    const status = document.getElementById('tracking-status');
-    status.textContent = result.status === 'ok' ? 'Saved!' : 'Error';
-    setTimeout(() => status.textContent = '', 2000);
-    return false;
-}
-
-// Poll system stats
 async function updateStats() {
     try {
         const resp = await fetch('/api/stats');
@@ -168,7 +381,6 @@ async function updateStats() {
         document.getElementById('sys-frames').textContent = stats.frame_count;
         const camStatus = stats.connected;
         document.getElementById('sys-connected').textContent = camStatus ? 'Connected' : 'Disconnected';
-        // Update navbar indicator
         const navEl = document.getElementById('connection-status');
         if (navEl) {
             navEl.textContent = camStatus ? 'Camera Connected' : 'No Camera';

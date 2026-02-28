@@ -12,7 +12,7 @@ from typing import Any, Callable
 import cv2
 import numpy as np
 
-from src.config import AppConfig
+from src.config import AppConfig, save_config_values
 from src.capture.stream import FrameGrabber
 from src.processing.preprocessor import Preprocessor
 from src.processing.detector import Detector
@@ -28,8 +28,9 @@ logger = logging.getLogger(__name__)
 class Pipeline:
     """Main processing pipeline orchestrator."""
 
-    def __init__(self, config: AppConfig):
+    def __init__(self, config: AppConfig, config_path: str | None = None):
         self._config = config
+        self._config_path = config_path
         self._running = False
         self._thread: threading.Thread | None = None
 
@@ -65,6 +66,9 @@ class Pipeline:
 
         # Track completion tracking
         self._prev_track_ids: set[int] = set()
+
+        # Incremented on every URL change so in-flight frames are discarded
+        self._url_version: int = 0
 
     @property
     def display_frame(self) -> np.ndarray | None:
@@ -119,6 +123,53 @@ class Pipeline:
         self._event_logger.close()
         logger.info("Pipeline stopped")
 
+    def update_stream_url(self, url: str) -> None:
+        """Update the RTSP URL and reconnect the stream grabber."""
+        self._config.capture.rtsp_url = url
+        self._url_version += 1
+        self._grabber.set_url(url)
+        with self._display_lock:
+            self._display_frame = None
+
+    def persist_rtsp_url(self, url: str) -> None:
+        """Write the RTSP URL to the config file on disk."""
+        save_config_values({"rtsp_url": url}, self._config_path)
+
+    def persist_config_values(self, data: dict) -> None:
+        """Write arbitrary key/value pairs to the config file on disk."""
+        save_config_values(data, self._config_path)
+
+    def update_capture_config(self, **kwargs: Any) -> None:
+        """Update capture settings (reconnect_delay, grab_timeout)."""
+        for key, value in kwargs.items():
+            if hasattr(self._config.capture, key):
+                setattr(self._config.capture, key, value)
+
+    def update_processing_config(self, **kwargs: Any) -> None:
+        """Update processing parameters and rebuild the preprocessor."""
+        for key, value in kwargs.items():
+            if hasattr(self._config.processing, key):
+                setattr(self._config.processing, key, value)
+        self._preprocessor = Preprocessor(self._config.processing)
+
+    def update_classification_config(self, **kwargs: Any) -> None:
+        """Update classification parameters (Classifier references the config object)."""
+        for key, value in kwargs.items():
+            if hasattr(self._config.classification, key):
+                setattr(self._config.classification, key, value)
+
+    def update_recording_config(self, **kwargs: Any) -> None:
+        """Update recording parameters."""
+        for key, value in kwargs.items():
+            if hasattr(self._config.recording, key):
+                setattr(self._config.recording, key, value)
+
+    def update_web_config(self, **kwargs: Any) -> None:
+        """Update web/stream parameters."""
+        for key, value in kwargs.items():
+            if hasattr(self._config.web, key):
+                setattr(self._config.web, key, value)
+
     def update_detection_config(self, **kwargs: Any) -> None:
         """Update detection parameters at runtime."""
         for key, value in kwargs.items():
@@ -145,8 +196,12 @@ class Pipeline:
         fps_set = False
 
         while self._running:
+            url_ver = self._url_version
             frame, frame_num = self._grabber.get_frame()
             if frame is None:
+                self._fps_actual = 0.0
+                fps_frame_count = 0
+                fps_timer = time.monotonic()
                 time.sleep(0.01)
                 continue
 
@@ -210,7 +265,9 @@ class Pipeline:
             # Draw overlays on display frame
             annotated = self._draw_overlays(display, tracks)
             with self._display_lock:
-                self._display_frame = annotated
+                # Discard if URL changed while this frame was being processed
+                if self._url_version == url_ver:
+                    self._display_frame = annotated
 
             # FPS calculation
             fps_frame_count += 1

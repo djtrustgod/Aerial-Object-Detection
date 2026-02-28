@@ -109,6 +109,14 @@ class EventLogger:
         total = sum(counts.values())
         return {"total": total, "by_class": counts}
 
+    def clear_all(self) -> int:
+        """Delete all events. Returns the number of rows removed."""
+        cursor = self._conn.execute("DELETE FROM events")
+        self._conn.commit()
+        count = cursor.rowcount
+        logger.info("Cleared %d events from history", count)
+        return count
+
     def close(self) -> None:
         """Close the database connection."""
         self._conn.close()

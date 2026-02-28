@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -134,3 +135,23 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         config.web.port = int(env_port)
 
     return config
+
+
+def save_config_values(data: dict, path: str | Path | None = None) -> None:
+    """Update key/value pairs in the YAML config file, preserving all comments."""
+    if path is None:
+        path = os.environ.get("CONFIG_PATH", "config/default.yaml")
+    path = Path(path)
+    if not path.exists():
+        return
+    text = path.read_text()
+    for key, value in data.items():
+        escaped = re.escape(key)
+        if isinstance(value, bool):
+            val_str = "true" if value else "false"
+            text = re.sub(rf'(\b{escaped}:\s*)(true|false)', rf'\g<1>{val_str}', text)
+        elif isinstance(value, str):
+            text = re.sub(rf'({escaped}:\s*)"[^"]*"', rf'\g<1>"{value}"', text)
+        else:
+            text = re.sub(rf'({escaped}:\s*)[\d.]+', rf'\g<1>{value}', text)
+    path.write_text(text)

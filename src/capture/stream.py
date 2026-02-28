@@ -54,6 +54,14 @@ class FrameGrabber:
         self._thread.start()
         logger.info("Frame grabber started for: %s", self._url)
 
+    def set_url(self, url: str) -> None:
+        """Change the stream URL and trigger reconnection on next loop tick."""
+        self._url = url
+        self._connected = False
+        with self._lock:
+            self._frame = None
+        logger.info("Stream URL changed to: %s", url)
+
     def stop(self) -> None:
         """Stop the grabber and release the capture."""
         self._running = False
@@ -130,8 +138,10 @@ class FrameGrabber:
                 ret, frame = self._cap.retrieve()
                 if ret and frame is not None:
                     with self._lock:
-                        self._frame = frame
-                        self._frame_number += 1
+                        # Only store if URL hasn't changed mid-grab
+                        if self._connected:
+                            self._frame = frame
+                            self._frame_number += 1
 
             except Exception:
                 logger.exception("Error in grab loop")

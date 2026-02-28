@@ -1,60 +1,59 @@
 capture:
-  rtsp_url: "rtsp://user:pass@192.168.1.100:554/stream1"
-  reconnect_delay: 5.0       # seconds between reconnection attempts
-  grab_timeout: 10.0         # seconds before treating stream as dead
+  rtsp_url: "rtsp://JoeChip:Runciter2024@192.168.145.8/stream1"
+  reconnect_delay: 5.0       # How long to wait (seconds) before retrying a lost camera connection
+  grab_timeout: 10.0         # How long to wait (seconds) with no new frames before reconnecting
 
 processing:
-  resize_width: 640
-  resize_height: 360
-  clahe_clip_limit: 2.0
-  clahe_grid_size: 8
-  blur_kernel: 5
-  frame_skip: 2              # process every Nth frame
+  resize_width: 640          # Width (pixels) frames are resized to before processing
+  resize_height: 360         # Height (pixels) frames are resized to before processing
+  clahe_clip_limit: 2.0      # Night-vision contrast boost strength — higher values are more aggressive
+  clahe_grid_size: 8         # Grid size used for contrast enhancement — higher values enhance finer detail
+  blur_kernel: 5             # Blur amount applied to reduce camera noise before detection (must be odd)
+  frame_skip: 10              # Analyze every Nth frame — higher values reduce CPU load but slow response time
 
 detection:
-  # Frame differencing
-  diff_threshold: 25
-  # MOG2 background subtractor
-  mog2_history: 500
-  mog2_var_threshold: 40
-  mog2_detect_shadows: false
-  # Morphology
-  morph_kernel_size: 3
-  morph_erode_iterations: 1
-  morph_dilate_iterations: 2
-  # Contour filtering
-  min_contour_area: 4        # pixels²
-  max_contour_area: 500      # pixels²
-  min_circularity: 0.3
+  # Motion detection via frame differencing
+  diff_threshold: 25         # How different a pixel must be to count as motion (0–255, lower = more sensitive)
+  # Background learning (removes stationary background to isolate moving objects)
+  mog2_history: 500          # How many past frames are used to learn what the background looks like
+  mog2_var_threshold: 40     # How much a pixel must differ from background to be flagged (lower = more sensitive)
+  mog2_detect_shadows: false # Whether to detect and exclude shadows — should be off for nighttime sky
+  # Noise cleanup
+  morph_kernel_size: 3       # Size of the filter used to clean up noisy detections (pixels)
+  morph_erode_iterations: 1  # How many passes of shrinking are applied to remove tiny noise blobs
+  morph_dilate_iterations: 2 # How many passes of expanding are applied to fill gaps in detected objects
+  # Object size filtering
+  min_contour_area: 4        # Smallest object size to consider (pixels²) — filters out single-pixel noise
+  max_contour_area: 500      # Largest object size to consider (pixels²) — filters out clouds and large artifacts
+  min_circularity: 0.3       # How round an object must be (0–1) — filters out edge streaks and irregular shapes
 
 tracking:
-  max_distance: 50           # max pixel distance for centroid matching
-  max_disappeared: 15        # frames before dropping track
-  min_track_length: 5        # minimum frames to consider a valid track
+  max_distance: 50           # How far (pixels) an object can move between frames and still be the same track
+  max_disappeared: 15        # How many frames an object can go missing before its track is dropped
+  min_track_length: 5        # Minimum frames an object must be tracked before it is reported as a detection
 
 classification:
-  # FFT blink detection
-  blink_freq_low: 0.5        # Hz
-  blink_freq_high: 3.0       # Hz
-  blink_power_threshold: 0.3 # normalized FFT power to declare "blinking"
-  # Trajectory linearity (R² from polyfit)
-  linearity_threshold: 0.85  # above = satellite-like
-  # Speed thresholds (pixels/frame at processing resolution)
-  satellite_speed_min: 1.0
-  satellite_speed_max: 8.0
-  # UAP scoring
-  acceleration_var_threshold: 2.0  # high accel variance = erratic
+  # Aircraft identification — looks for regular blinking (strobe lights)
+  blink_freq_low: 0.5        # Lowest blink rate to look for (Hz)
+  blink_freq_high: 3.0       # Highest blink rate to look for (Hz)
+  blink_power_threshold: 0.3 # How strong the blink signal must be to classify as an aircraft (0–1)
+  # Satellite identification — satellites move in very straight lines at steady speed
+  linearity_threshold: 0.85  # How straight a path must be to classify as a satellite (0–1, higher = straighter)
+  satellite_speed_min: 1.0   # Minimum movement speed for satellite classification (pixels per frame)
+  satellite_speed_max: 8.0   # Maximum movement speed for satellite classification (pixels per frame)
+  # Unusual movement detection
+  acceleration_var_threshold: 2.0  # How erratic the acceleration must be before flagging as unusual movement
 
 recording:
-  clip_pre_buffer: 3.0       # seconds of pre-event buffer
-  clip_post_buffer: 5.0      # seconds of post-event recording
-  clip_dir: "data/clips"
-  db_path: "data/db/detections.db"
-  log_dir: "data/logs"
-  jpeg_quality: 70
+  clip_pre_buffer: 3.0       # Seconds of footage saved before a detection event begins
+  clip_post_buffer: 5.0      # Seconds of footage saved after a detection event ends
+  clip_dir: "data/clips"     # Folder where recorded video clips are saved
+  db_path: "data/db/detections.db"  # Path to the database file used for logging detection events
+  log_dir: "data/logs"       # Folder where application log files are written
+  jpeg_quality: 70           # Image quality for saved frames (1–100, higher = better quality, larger files)
 
 web:
-  host: "0.0.0.0"
-  port: 8080
-  stream_fps: 10             # max MJPEG WebSocket FPS
-  stream_quality: 70         # JPEG quality for WebSocket stream
+  host: "0.0.0.0"            # Network address to listen on — 0.0.0.0 makes the dashboard accessible on all interfaces
+  port: 8080                 # Port the web dashboard runs on
+  stream_fps: 10             # Maximum frames per second delivered to the live stream preview
+  stream_quality: 70         # Image quality for the live stream preview (1–100)

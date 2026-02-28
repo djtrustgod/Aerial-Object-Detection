@@ -92,7 +92,7 @@ def main() -> None:
     Path(config.recording.db_path).parent.mkdir(parents=True, exist_ok=True)
 
     # Create pipeline and web app
-    pipeline = Pipeline(config)
+    pipeline = Pipeline(config, config_path=args.config)
     app = create_app(pipeline)
 
     # Start pipeline before web server
