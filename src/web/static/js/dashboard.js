@@ -54,7 +54,7 @@ const MAX_EVENTS = 50;
 
 // Chart.js stats
 let statsChart = null;
-const classCounts = { aircraft: 0, satellite: 0, uap: 0, unknown: 0 };
+let totalDetections = 0;
 
 function connectEvents() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -91,11 +91,8 @@ function handleEvent(data) {
         renderEventFeed();
 
         // Update chart
-        const cls = data.classification || 'unknown';
-        if (cls in classCounts) {
-            classCounts[cls]++;
-            updateChart();
-        }
+        totalDetections++;
+        updateChart();
     }
 }
 
@@ -109,10 +106,9 @@ function renderEventFeed() {
 
     eventFeed.innerHTML = eventBuffer.map(e => `
         <div class="event-item">
-            <span class="class-badge ${e.classification}">${e.classification}</span>
             <span>ID #${e.object_id}</span>
-            <span>${(e.confidence * 100).toFixed(0)}%</span>
             <span>${e.speed ? e.speed.toFixed(1) + ' px/f' : ''}</span>
+            <span>${e.trajectory_length ? e.trajectory_length + ' pts' : ''}</span>
         </div>
     `).join('');
 }
@@ -125,21 +121,11 @@ function initChart() {
     statsChart = new Chart(chartCanvas, {
         type: 'doughnut',
         data: {
-            labels: ['Aircraft', 'Satellite', 'UAP', 'Unknown'],
+            labels: ['Detections'],
             datasets: [{
-                data: [0, 0, 0, 0],
-                backgroundColor: [
-                    'rgba(34, 197, 94, 0.7)',
-                    'rgba(6, 182, 212, 0.7)',
-                    'rgba(239, 68, 68, 0.7)',
-                    'rgba(148, 163, 184, 0.4)',
-                ],
-                borderColor: [
-                    'rgba(34, 197, 94, 1)',
-                    'rgba(6, 182, 212, 1)',
-                    'rgba(239, 68, 68, 1)',
-                    'rgba(148, 163, 184, 1)',
-                ],
+                data: [0],
+                backgroundColor: ['rgba(34, 197, 94, 0.7)'],
+                borderColor: ['rgba(34, 197, 94, 1)'],
                 borderWidth: 1,
             }]
         },
@@ -162,23 +148,14 @@ async function loadInitialStats() {
     try {
         const resp = await fetch('/api/event-stats');
         const stats = await resp.json();
-        if (stats.by_class) {
-            for (const [cls, count] of Object.entries(stats.by_class)) {
-                if (cls in classCounts) classCounts[cls] = count;
-            }
-            updateChart();
-        }
+        totalDetections = stats.total || 0;
+        updateChart();
     } catch (e) {}
 }
 
 function updateChart() {
     if (!statsChart) return;
-    statsChart.data.datasets[0].data = [
-        classCounts.aircraft,
-        classCounts.satellite,
-        classCounts.uap,
-        classCounts.unknown,
-    ];
+    statsChart.data.datasets[0].data = [totalDetections];
     statsChart.update();
 }
 

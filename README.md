@@ -1,16 +1,16 @@
 # Aerial Object Detection
 
-Nighttime aerial object detection system using classical computer vision. Connects to RTSP cameras or video files, detects and classifies moving objects in the sky (aircraft, satellites, UAPs), and serves a real-time web dashboard. Runs entirely on CPU with no deep learning dependencies.
+Nighttime aerial object detection system using classical computer vision. Connects to RTSP cameras or video files, detects small moving lighted objects in the night sky, and serves a real-time web dashboard. Runs entirely on CPU with no deep learning dependencies.
 
 ## Features
 
 - **Real-time RTSP streaming** with automatic reconnection
-- **Multi-stage detection pipeline**: frame differencing + MOG2 background subtraction, morphological filtering, and contour analysis
+- **Multi-stage detection pipeline**: frame differencing + MOG2 background subtraction, morphological filtering, and contour analysis — tuned for small (2-10 px) lighted objects on compressed, noisy feeds
 - **Centroid-based object tracking** across frames with automatic track lifecycle management
-- **Rule-based classification** using FFT blink analysis, trajectory linearity (R²), and speed/acceleration profiling to distinguish aircraft, satellites, and UAPs
 - **Event recording** with pre/post-event buffered video clips and SQLite event logging
 - **Web dashboard** with live MJPEG stream via WebSocket, detection history, and statistics (Chart.js)
-- **Fully configurable** via YAML with CLI overrides
+- **Detection scheduling** with configurable time windows and manual override toggle
+- **Fully configurable** via YAML with CLI overrides and live settings from the dashboard
 
 ## Requirements
 
@@ -53,9 +53,9 @@ All parameters are in [config/default.yaml](config/default.yaml). Key sections:
 | `processing` | Resize dimensions, CLAHE, blur, frame skip |
 | `detection` | Diff threshold, MOG2 params, morphology, contour filters |
 | `tracking` | Max matching distance, disappear timeout, min track length |
-| `classification` | FFT blink band, linearity threshold, speed ranges, acceleration variance |
 | `recording` | Pre/post buffer duration, clip output dir, database path |
 | `web` | Host, port, stream FPS and quality |
+| `schedule` | Enable/disable detection time window, start/end times |
 
 ## How It Works
 
@@ -75,20 +75,11 @@ Detection (frame diff + MOG2 -> morphology -> contour filtering)
 Tracking (centroid matching across frames)
     |
     v
-Classification (FFT blink + trajectory R² + speed analysis)
-    |
-    v
 Recording (buffered clip writer + SQLite event logger)
     |
     v
 Web Dashboard (FastAPI + WebSocket MJPEG stream)
 ```
-
-**Classification rules:**
-
-- **Aircraft**: Periodic blinking detected via FFT in the 0.5-3.0 Hz band, moderate trajectory linearity
-- **Satellite**: Highly linear trajectory (R² > 0.85), constant speed in expected range, no blinking
-- **UAP**: Erratic trajectory, high acceleration variance, does not match aircraft or satellite profiles
 
 ## Project Structure
 
@@ -103,9 +94,8 @@ src/
     preprocessor.py          # Resize, CLAHE, blur
     detector.py              # Frame diff + MOG2 + contour extraction
     tracker.py               # Centroid-based multi-object tracker
-    classifier.py            # FFT blink + trajectory + speed classifier
   recording/
-    models.py                # Data models (TrackedObject, ObjectClass)
+    models.py                # Data models (Detection, TrackedObject, DetectionEvent)
     clip_writer.py           # Buffered MP4 clip writer
     event_logger.py          # SQLite event logger (WAL mode)
   web/
@@ -114,7 +104,7 @@ src/
     websocket.py             # Live MJPEG stream over WebSocket
     templates/               # Jinja2 templates (dashboard, history, settings)
     static/                  # CSS and JS assets
-tests/                       # Unit tests (19 tests)
+tests/                       # Unit tests (11 tests)
 ```
 
 ## Testing

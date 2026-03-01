@@ -49,17 +49,6 @@ class TrackingConfig:
 
 
 @dataclass
-class ClassificationConfig:
-    blink_freq_low: float = 0.5
-    blink_freq_high: float = 3.0
-    blink_power_threshold: float = 0.3
-    linearity_threshold: float = 0.85
-    satellite_speed_min: float = 1.0
-    satellite_speed_max: float = 8.0
-    acceleration_var_threshold: float = 2.0
-
-
-@dataclass
 class RecordingConfig:
     clip_pre_buffer: float = 3.0
     clip_post_buffer: float = 5.0
@@ -90,7 +79,6 @@ class AppConfig:
     processing: ProcessingConfig = field(default_factory=ProcessingConfig)
     detection: DetectionConfig = field(default_factory=DetectionConfig)
     tracking: TrackingConfig = field(default_factory=TrackingConfig)
-    classification: ClassificationConfig = field(default_factory=ClassificationConfig)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
     web: WebConfig = field(default_factory=WebConfig)
     schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
@@ -120,7 +108,6 @@ def load_config(path: str | Path | None = None) -> AppConfig:
             "processing": config.processing,
             "detection": config.detection,
             "tracking": config.tracking,
-            "classification": config.classification,
             "recording": config.recording,
             "web": config.web,
             "schedule": config.schedule,

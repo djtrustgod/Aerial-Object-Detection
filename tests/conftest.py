@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from src.config import (
-    ClassificationConfig,
     DetectionConfig,
     ProcessingConfig,
     TrackingConfig,
@@ -30,11 +29,6 @@ def tracking_config() -> TrackingConfig:
         max_disappeared=5,
         min_track_length=3,
     )
-
-
-@pytest.fixture
-def classification_config() -> ClassificationConfig:
-    return ClassificationConfig()
 
 
 @pytest.fixture

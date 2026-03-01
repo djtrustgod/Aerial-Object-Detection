@@ -201,55 +201,6 @@
         </div>
     </div>
 
-    <!-- Classification -->
-    <div class="card">
-        <div class="card-header"><h2>Classification</h2></div>
-        <div class="card-body">
-            <form id="classification-form" onsubmit="return saveSection(event, '/api/settings/classification', 'classification-status')">
-                <div class="section-label">Aircraft Detection (Blinking Lights)</div>
-                <div class="form-group">
-                    <label>Min Blink Rate (Hz)</label>
-                    <small class="field-hint">Lowest blink rate to look for — aircraft strobes blink at regular intervals</small>
-                    <input type="number" name="blink_freq_low" value="{{ config.classification.blink_freq_low }}" min="0.1" max="10" step="0.1">
-                </div>
-                <div class="form-group">
-                    <label>Max Blink Rate (Hz)</label>
-                    <small class="field-hint">Highest blink rate to look for</small>
-                    <input type="number" name="blink_freq_high" value="{{ config.classification.blink_freq_high }}" min="0.1" max="20" step="0.1">
-                </div>
-                <div class="form-group">
-                    <label>Blink Signal Strength (0–1)</label>
-                    <small class="field-hint">How strong the blink signal must be to classify as an aircraft</small>
-                    <input type="number" name="blink_power_threshold" value="{{ config.classification.blink_power_threshold }}" min="0" max="1" step="0.05">
-                </div>
-                <div class="section-label">Satellite Detection (Steady, Straight Path)</div>
-                <div class="form-group">
-                    <label>Path Straightness (0–1)</label>
-                    <small class="field-hint">How straight a path must be to classify as a satellite — higher values require a straighter path</small>
-                    <input type="number" name="linearity_threshold" value="{{ config.classification.linearity_threshold }}" min="0" max="1" step="0.05">
-                </div>
-                <div class="form-group">
-                    <label>Min Satellite Speed (px/frame)</label>
-                    <small class="field-hint">Minimum movement speed for satellite classification</small>
-                    <input type="number" name="satellite_speed_min" value="{{ config.classification.satellite_speed_min }}" min="0.1" max="20" step="0.1">
-                </div>
-                <div class="form-group">
-                    <label>Max Satellite Speed (px/frame)</label>
-                    <small class="field-hint">Maximum movement speed for satellite classification</small>
-                    <input type="number" name="satellite_speed_max" value="{{ config.classification.satellite_speed_max }}" min="0.5" max="50" step="0.5">
-                </div>
-                <div class="section-label">Unusual Movement Detection</div>
-                <div class="form-group">
-                    <label>Unusual Motion Threshold</label>
-                    <small class="field-hint">How erratic the acceleration must be before flagging as unusual movement</small>
-                    <input type="number" name="acceleration_var_threshold" value="{{ config.classification.acceleration_var_threshold }}" min="0.1" max="20" step="0.1">
-                </div>
-                <button type="submit" class="btn">Apply</button>
-                <span id="classification-status" class="save-status"></span>
-            </form>
-        </div>
-    </div>
-
     <!-- Recording -->
     <div class="card">
         <div class="card-header"><h2>Recording</h2></div>

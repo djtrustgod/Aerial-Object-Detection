@@ -3,15 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Optional
-
-
-class ObjectClass(str, Enum):
-    AIRCRAFT = "aircraft"
-    SATELLITE = "satellite"
-    UAP = "uap"
-    UNKNOWN = "unknown"
 
 
 @dataclass
@@ -36,8 +28,6 @@ class TrackedObject:
     brightness_history: list[float] = field(default_factory=list)
     frame_history: list[int] = field(default_factory=list)
     disappeared: int = 0
-    classification: ObjectClass = ObjectClass.UNKNOWN
-    confidence: float = 0.0
     speed: float = 0.0       # pixels per frame
 
 
@@ -46,8 +36,6 @@ class DetectionEvent:
     """A completed detection event for logging."""
     event_id: Optional[int] = None
     object_id: int = 0
-    classification: ObjectClass = ObjectClass.UNKNOWN
-    confidence: float = 0.0
     start_time: float = 0.0
     end_time: float = 0.0
     start_frame: int = 0

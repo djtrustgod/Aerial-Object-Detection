@@ -6,17 +6,17 @@ capture:
 processing:
   resize_width: 640          # Width (pixels) frames are resized to before processing
   resize_height: 360         # Height (pixels) frames are resized to before processing
-  clahe_clip_limit: 2.0      # Night-vision contrast boost strength — higher values are more aggressive
+  clahe_clip_limit: 3.0      # Night-vision contrast boost strength — higher values are more aggressive
   clahe_grid_size: 8         # Grid size used for contrast enhancement — higher values enhance finer detail
   blur_kernel: 5             # Blur amount applied to reduce camera noise before detection (must be odd)
-  frame_skip: 10              # Analyze every Nth frame — higher values reduce CPU load but slow response time
+  frame_skip: 4               # Analyze every Nth frame — higher values reduce CPU load but slow response time
 
 detection:
   # Motion detection via frame differencing
-  diff_threshold: 25         # How different a pixel must be to count as motion (0–255, lower = more sensitive)
+  diff_threshold: 18         # How different a pixel must be to count as motion (0–255, lower = more sensitive)
   # Background learning (removes stationary background to isolate moving objects)
   mog2_history: 500          # How many past frames are used to learn what the background looks like
-  mog2_var_threshold: 40     # How much a pixel must differ from background to be flagged (lower = more sensitive)
+  mog2_var_threshold: 25     # How much a pixel must differ from background to be flagged (lower = more sensitive)
   mog2_detect_shadows: false # Whether to detect and exclude shadows — should be off for nighttime sky
   # Noise cleanup
   morph_kernel_size: 3       # Size of the filter used to clean up noisy detections (pixels)
@@ -29,20 +29,8 @@ detection:
 
 tracking:
   max_distance: 50           # How far (pixels) an object can move between frames and still be the same track
-  max_disappeared: 15        # How many frames an object can go missing before its track is dropped
+  max_disappeared: 10        # How many frames an object can go missing before its track is dropped
   min_track_length: 5        # Minimum frames an object must be tracked before it is reported as a detection
-
-classification:
-  # Aircraft identification — looks for regular blinking (strobe lights)
-  blink_freq_low: 0.5        # Lowest blink rate to look for (Hz)
-  blink_freq_high: 3.0       # Highest blink rate to look for (Hz)
-  blink_power_threshold: 0.3 # How strong the blink signal must be to classify as an aircraft (0–1)
-  # Satellite identification — satellites move in very straight lines at steady speed
-  linearity_threshold: 0.85  # How straight a path must be to classify as a satellite (0–1, higher = straighter)
-  satellite_speed_min: 1.0   # Minimum movement speed for satellite classification (pixels per frame)
-  satellite_speed_max: 8.0   # Maximum movement speed for satellite classification (pixels per frame)
-  # Unusual movement detection
-  acceleration_var_threshold: 2.0  # How erratic the acceleration must be before flagging as unusual movement
 
 recording:
   clip_pre_buffer: 3.0       # Seconds of footage saved before a detection event begins

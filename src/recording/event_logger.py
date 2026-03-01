@@ -6,7 +6,7 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from src.recording.models import DetectionEvent, ObjectClass
+from src.recording.models import DetectionEvent
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +14,6 @@ CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS events (
     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
     object_id INTEGER NOT NULL,
-    classification TEXT NOT NULL,
-    confidence REAL NOT NULL,
     start_time REAL NOT NULL,
     end_time REAL NOT NULL,
     start_frame INTEGER NOT NULL,
@@ -30,28 +28,20 @@ CREATE TABLE IF NOT EXISTS events (
 
 INSERT_SQL = """
 INSERT INTO events (
-    object_id, classification, confidence, start_time, end_time,
+    object_id, start_time, end_time,
     start_frame, end_frame, avg_x, avg_y, avg_speed,
     trajectory_length, clip_path
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 """
 
 SELECT_ALL_SQL = """
-SELECT event_id, object_id, classification, confidence, start_time,
+SELECT event_id, object_id, start_time,
        end_time, start_frame, end_frame, avg_x, avg_y, avg_speed,
        trajectory_length, clip_path
 FROM events ORDER BY start_time DESC
 """
 
 SELECT_RECENT_SQL = SELECT_ALL_SQL + " LIMIT ?"
-
-SELECT_BY_CLASS_SQL = """
-SELECT event_id, object_id, classification, confidence, start_time,
-       end_time, start_frame, end_frame, avg_x, avg_y, avg_speed,
-       trajectory_length, clip_path
-FROM events WHERE classification = ?
-ORDER BY start_time DESC LIMIT ?
-"""
 
 
 class EventLogger:
@@ -71,8 +61,6 @@ class EventLogger:
         """Insert a detection event. Returns the event_id."""
         cursor = self._conn.execute(INSERT_SQL, (
             event.object_id,
-            event.classification.value,
-            event.confidence,
             event.start_time,
             event.end_time,
             event.start_frame,
@@ -85,8 +73,7 @@ class EventLogger:
         ))
         self._conn.commit()
         event_id = cursor.lastrowid
-        logger.info("Logged event #%d: %s (confidence=%.2f)",
-                     event_id, event.classification.value, event.confidence)
+        logger.info("Logged event #%d (object_id=%d)", event_id, event.object_id)
         return event_id
 
     def get_recent(self, limit: int = 50) -> list[DetectionEvent]:
@@ -94,20 +81,11 @@ class EventLogger:
         cursor = self._conn.execute(SELECT_RECENT_SQL, (limit,))
         return [self._row_to_event(row) for row in cursor.fetchall()]
 
-    def get_by_classification(self, cls: ObjectClass,
-                              limit: int = 50) -> list[DetectionEvent]:
-        """Get events filtered by classification."""
-        cursor = self._conn.execute(SELECT_BY_CLASS_SQL, (cls.value, limit))
-        return [self._row_to_event(row) for row in cursor.fetchall()]
-
     def get_stats(self) -> dict:
         """Get summary statistics."""
-        cursor = self._conn.execute(
-            "SELECT classification, COUNT(*) FROM events GROUP BY classification"
-        )
-        counts = {row[0]: row[1] for row in cursor.fetchall()}
-        total = sum(counts.values())
-        return {"total": total, "by_class": counts}
+        cursor = self._conn.execute("SELECT COUNT(*) FROM events")
+        total = cursor.fetchone()[0]
+        return {"total": total}
 
     def delete_by_ids(self, event_ids: list[int]) -> list[str]:
         """Delete specific events by ID. Returns clip_paths of deleted events."""
@@ -146,15 +124,13 @@ class EventLogger:
         return DetectionEvent(
             event_id=row[0],
             object_id=row[1],
-            classification=ObjectClass(row[2]),
-            confidence=row[3],
-            start_time=row[4],
-            end_time=row[5],
-            start_frame=row[6],
-            end_frame=row[7],
-            avg_x=row[8],
-            avg_y=row[9],
-            avg_speed=row[10],
-            trajectory_length=row[11],
-            clip_path=row[12],
+            start_time=row[2],
+            end_time=row[3],
+            start_frame=row[4],
+            end_frame=row[5],
+            avg_x=row[6],
+            avg_y=row[7],
+            avg_speed=row[8],
+            trajectory_length=row[9],
+            clip_path=row[10],
         )

@@ -1,4 +1,4 @@
-"""Pipeline orchestrator: capture → detect → track → classify → record."""
+"""Pipeline orchestrator: capture → detect → track → record."""
 
 from __future__ import annotations
 
@@ -18,10 +18,9 @@ from src.capture.stream import FrameGrabber
 from src.processing.preprocessor import Preprocessor
 from src.processing.detector import Detector
 from src.processing.tracker import CentroidTracker
-from src.processing.classifier import Classifier
 from src.recording.clip_writer import ClipWriter
 from src.recording.event_logger import EventLogger
-from src.recording.models import DetectionEvent, ObjectClass, TrackedObject
+from src.recording.models import DetectionEvent, TrackedObject
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,6 @@ class Pipeline:
         self._preprocessor = Preprocessor(config.processing)
         self._detector = Detector(config.detection)
         self._tracker = CentroidTracker(config.tracking)
-        self._classifier = Classifier(config.classification)
         self._clip_writer = ClipWriter(
             clip_dir=config.recording.clip_dir,
             pre_buffer_seconds=config.recording.clip_pre_buffer,
@@ -161,12 +159,6 @@ class Pipeline:
                 setattr(self._config.processing, key, value)
         self._preprocessor = Preprocessor(self._config.processing)
 
-    def update_classification_config(self, **kwargs: Any) -> None:
-        """Update classification parameters (Classifier references the config object)."""
-        for key, value in kwargs.items():
-            if hasattr(self._config.classification, key):
-                setattr(self._config.classification, key, value)
-
     def update_recording_config(self, **kwargs: Any) -> None:
         """Update recording parameters."""
         for key, value in kwargs.items():
@@ -242,9 +234,7 @@ class Pipeline:
 
             # Set FPS from stream on first frame
             if not fps_set and self._grabber.is_connected:
-                stream_fps = self._grabber.fps
-                self._classifier.fps = stream_fps
-                self._clip_writer.fps = stream_fps
+                self._clip_writer.fps = self._grabber.fps
                 fps_set = True
 
             # Frame skipping
@@ -276,14 +266,8 @@ class Pipeline:
             self._active_tracks = len(tracks)
 
             if in_schedule:
-                # Classify mature tracks
-                mature = self._tracker.mature_objects
-                for oid, obj in mature.items():
-                    cls, conf = self._classifier.classify(obj)
-                    obj.classification = cls
-                    obj.confidence = conf
-
                 # Check for completed tracks (were active, now gone)
+                mature = self._tracker.mature_objects
                 current_ids = set(tracks.keys())
                 self._prev_track_ids = current_ids
 
@@ -292,8 +276,7 @@ class Pipeline:
                 if has_detections:
                     clip_path = self._clip_writer.trigger_recording()
                     for oid, obj in mature.items():
-                        if obj.classification != ObjectClass.UNKNOWN:
-                            self._publish_event(obj, clip_path)
+                        self._publish_event(obj, clip_path)
 
             # Draw overlays on display frame (includes timestamp)
             annotated = self._draw_overlays(display, tracks)
@@ -315,19 +298,12 @@ class Pipeline:
 
     def _draw_overlays(self, frame: np.ndarray,
                        tracks: dict[int, TrackedObject]) -> np.ndarray:
-        """Draw bounding boxes, IDs, and classification labels."""
+        """Draw bounding boxes, IDs, and trajectory overlays."""
         annotated = frame.copy()
-
-        color_map = {
-            ObjectClass.AIRCRAFT: (0, 255, 0),    # Green
-            ObjectClass.SATELLITE: (255, 255, 0),  # Cyan
-            ObjectClass.UAP: (0, 0, 255),          # Red
-            ObjectClass.UNKNOWN: (128, 128, 128),  # Gray
-        }
+        color = (0, 255, 0)  # Green for all tracks
 
         for oid, obj in tracks.items():
             cx, cy = obj.centroid
-            color = color_map.get(obj.classification, (128, 128, 128))
 
             # Draw crosshair
             cv2.drawMarker(annotated, (cx, cy), color,
@@ -339,10 +315,7 @@ class Pipeline:
                 cv2.polylines(annotated, [pts], False, color, 1)
 
             # Label
-            label = f"#{oid} {obj.classification.value}"
-            if obj.confidence > 0:
-                label += f" {obj.confidence:.0%}"
-            cv2.putText(annotated, label, (cx + 10, cy - 5),
+            cv2.putText(annotated, f"#{oid}", (cx + 10, cy - 5),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
         # HUD overlay
@@ -378,8 +351,6 @@ class Pipeline:
 
         event = DetectionEvent(
             object_id=obj.object_id,
-            classification=obj.classification,
-            confidence=obj.confidence,
             start_time=time.time(),
             end_time=time.time(),
             start_frame=obj.frame_history[0] if obj.frame_history else 0,
@@ -403,8 +374,6 @@ class Pipeline:
             "type": "detection",
             "event_id": event.event_id,
             "object_id": event.object_id,
-            "classification": event.classification.value,
-            "confidence": event.confidence,
             "x": avg_x,
             "y": avg_y,
             "speed": avg_speed,

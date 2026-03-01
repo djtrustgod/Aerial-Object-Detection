@@ -63,23 +63,12 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
         return JSONResponse(pipeline.stats)
 
     @router.get("/api/events")
-    async def api_events(limit: int = 50, classification: str | None = None):
-        if classification:
-            from src.recording.models import ObjectClass
-            try:
-                cls = ObjectClass(classification)
-                events = pipeline.event_logger.get_by_classification(cls, limit)
-            except ValueError:
-                return JSONResponse({"error": "Invalid classification"}, 400)
-        else:
-            events = pipeline.event_logger.get_recent(limit)
-
+    async def api_events(limit: int = 50):
+        events = pipeline.event_logger.get_recent(limit)
         return JSONResponse([
             {
                 "event_id": e.event_id,
                 "object_id": e.object_id,
-                "classification": e.classification.value,
-                "confidence": e.confidence,
                 "start_time": e.start_time,
                 "end_time": e.end_time,
                 "avg_x": e.avg_x,
@@ -182,14 +171,6 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
         body = await request.json()
         typed = _typed_dict(pipeline.config.tracking, body)
         pipeline.update_tracking_config(**typed)
-        pipeline.persist_config_values(typed)
-        return JSONResponse({"status": "ok", "updated": typed})
-
-    @router.post("/api/settings/classification")
-    async def api_update_classification(request: Request):
-        body = await request.json()
-        typed = _typed_dict(pipeline.config.classification, body)
-        pipeline.update_classification_config(**typed)
         pipeline.persist_config_values(typed)
         return JSONResponse({"status": "ok", "updated": typed})
 
