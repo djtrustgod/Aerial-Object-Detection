@@ -4,6 +4,10 @@
 
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+#detection-toggle { cursor: pointer; border: none; font: inherit; letter-spacing: inherit; padding: 0.35rem 1rem; }
+#detection-toggle:hover { opacity: 0.8; }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -15,7 +19,7 @@
             <div class="stream-controls">
                 <span id="stream-fps" class="badge">-- FPS</span>
                 <span id="stream-tracks" class="badge">0 tracks</span>
-                <span id="detection-status" class="badge">Detection On</span>
+                <button id="detection-toggle" class="badge detection-on" onclick="toggleDetection()">Stop Detection</button>
             </div>
         </div>
         <div class="card-body">

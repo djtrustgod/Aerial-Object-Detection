@@ -109,13 +109,33 @@ class EventLogger:
         total = sum(counts.values())
         return {"total": total, "by_class": counts}
 
-    def clear_all(self) -> int:
-        """Delete all events. Returns the number of rows removed."""
-        cursor = self._conn.execute("DELETE FROM events")
+    def delete_by_ids(self, event_ids: list[int]) -> list[str]:
+        """Delete specific events by ID. Returns clip_paths of deleted events."""
+        if not event_ids:
+            return []
+        placeholders = ",".join("?" * len(event_ids))
+        cursor = self._conn.execute(
+            f"SELECT clip_path FROM events WHERE event_id IN ({placeholders})",
+            event_ids,
+        )
+        clip_paths = [row[0] for row in cursor.fetchall() if row[0]]
+        self._conn.execute(
+            f"DELETE FROM events WHERE event_id IN ({placeholders})", event_ids
+        )
         self._conn.commit()
-        count = cursor.rowcount
+        return clip_paths
+
+    def clear_all(self) -> tuple[int, list[str]]:
+        """Delete all events. Returns (count, clip_paths) of removed events."""
+        cursor = self._conn.execute(
+            "SELECT clip_path FROM events WHERE clip_path IS NOT NULL"
+        )
+        clip_paths = [row[0] for row in cursor.fetchall()]
+        del_cursor = self._conn.execute("DELETE FROM events")
+        self._conn.commit()
+        count = del_cursor.rowcount
         logger.info("Cleared %d events from history", count)
-        return count
+        return count, clip_paths
 
     def close(self) -> None:
         """Close the database connection."""

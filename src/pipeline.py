@@ -71,6 +71,11 @@ class Pipeline:
         # Incremented on every URL change so in-flight frames are discarded
         self._url_version: int = 0
 
+        # Manual detection toggle (session-only, resets to True on restart)
+        self._detection_enabled: bool = True
+        # When True, _detection_enabled bypasses the schedule check entirely
+        self._schedule_override: bool = False
+
     @property
     def display_frame(self) -> np.ndarray | None:
         with self._display_lock:
@@ -85,8 +90,9 @@ class Pipeline:
             "frame_count": self._frame_count,
             "active_tracks": self._active_tracks,
             "connected": self._grabber.is_connected,
-            "detection_active": self._is_in_schedule(),
+            "detection_active": self._detection_enabled and (self._schedule_override or self._is_in_schedule()),
             "schedule_enabled": self._config.schedule.enabled,
+            "detection_enabled": self._detection_enabled,
         }
 
     @property
@@ -194,6 +200,14 @@ class Pipeline:
             if hasattr(self._config.schedule, key):
                 setattr(self._config.schedule, key, value)
 
+    def set_detection_enabled(self, enabled: bool) -> None:
+        """Manually enable or disable detection, overriding the schedule."""
+        self._detection_enabled = enabled
+        # Force-on sets the override flag so detection runs even outside scheduled hours.
+        # Force-off clears it (doesn't matter since enabled=False already gates the loop).
+        self._schedule_override = enabled
+        logger.info("Detection manually %s", "enabled" if enabled else "disabled")
+
     def _is_in_schedule(self) -> bool:
         """Return True if detection should run now (always True when scheduling is off)."""
         if not self._config.schedule.enabled:
@@ -249,8 +263,8 @@ class Pipeline:
             gray = self._preprocessor.process(frame)
             display = self._preprocessor.resize_only(frame)
 
-            # Detect (gated by schedule)
-            in_schedule = self._is_in_schedule()
+            # Detect — manual toggle gates first; override flag bypasses schedule
+            in_schedule = self._detection_enabled and (self._schedule_override or self._is_in_schedule())
 
             if in_schedule:
                 detections = self._detector.detect(gray, frame_num, timestamp)

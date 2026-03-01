@@ -164,8 +164,8 @@ body {
     color: var(--text-secondary);
 }
 
-.badge.detection-on  { background: rgba(34, 197, 94, 0.2); color: var(--green); }
-.badge.detection-off { background: rgba(234, 179, 8, 0.2);  color: var(--yellow); }
+.badge.detection-on  { background: rgba(34, 197, 94, 0.2);  color: var(--green); }
+.badge.detection-off { background: rgba(239, 68, 68, 0.2);  color: var(--red); }
 
 /* Classification badges */
 .class-badge {

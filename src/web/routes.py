@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -93,10 +95,40 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
     async def api_event_stats():
         return JSONResponse(pipeline.event_logger.get_stats())
 
+    @router.post("/api/detection/toggle")
+    async def api_detection_toggle(request: Request):
+        body = await request.json()
+        enabled = bool(body.get("enabled", True))
+        pipeline.set_detection_enabled(enabled)
+        return JSONResponse({"status": "ok", "detection_enabled": enabled})
+
     @router.delete("/api/events")
-    async def api_clear_events():
-        count = pipeline.event_logger.clear_all()
-        return JSONResponse({"status": "ok", "cleared": count})
+    async def api_clear_events(request: Request):
+        try:
+            body = await request.json()
+            event_ids = body.get("event_ids")
+        except Exception:
+            event_ids = None
+
+        clips_base = Path(pipeline.config.recording.clip_dir)
+
+        if event_ids:
+            clip_paths = pipeline.event_logger.delete_by_ids(event_ids)
+            count = len(event_ids)
+        else:
+            count, clip_paths = pipeline.event_logger.clear_all()
+
+        files_removed = 0
+        for cp in clip_paths:
+            try:
+                p = clips_base / Path(cp).name
+                if p.exists():
+                    p.unlink()
+                    files_removed += 1
+            except Exception:
+                pass
+
+        return JSONResponse({"status": "ok", "deleted": count, "files_removed": files_removed})
 
     # --- REST API: settings ---
 

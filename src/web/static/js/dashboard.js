@@ -182,6 +182,18 @@ function updateChart() {
     statsChart.update();
 }
 
+// --- Detection Toggle ---
+async function toggleDetection() {
+    const btn = document.getElementById('detection-toggle');
+    const currentlyActive = btn && btn.textContent.trim() === 'Stop Detection';
+    await fetch('/api/detection/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !currentlyActive }),
+    });
+    await pollStats();
+}
+
 // --- Stats Polling ---
 async function pollStats() {
     try {
@@ -194,16 +206,13 @@ async function pollStats() {
         if (tracksEl) tracksEl.textContent = `${stats.active_tracks} tracks`;
         updateCameraStatus(stats.connected);
 
-        const detEl = document.getElementById('detection-status');
+        const detEl = document.getElementById('detection-toggle');
         if (detEl) {
-            if (!stats.schedule_enabled) {
-                detEl.textContent = 'Detection On';
-                detEl.className = 'badge';
-            } else if (stats.detection_active) {
-                detEl.textContent = 'Detection Active';
+            if (stats.detection_active) {
+                detEl.textContent = 'Stop Detection';
                 detEl.className = 'badge detection-on';
             } else {
-                detEl.textContent = 'Detection Scheduled';
+                detEl.textContent = 'Enable Detection';
                 detEl.className = 'badge detection-off';
             }
         }

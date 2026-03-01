@@ -9,7 +9,8 @@
       "Bash(git commit:*)",
       "Bash(netstat:*)",
       "Bash(powershell:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(python3:*)"
     ]
   }
 }
