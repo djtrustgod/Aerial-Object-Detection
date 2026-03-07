@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Aerial Detection{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=0.2.1">
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -16,7 +16,7 @@
             <a href="/settings" class="nav-link{% if request.url.path == '/settings' %} active{% endif %}">Settings</a>
         </div>
         <div class="nav-status">
-            <span id="connection-status" class="status-indicator offline">Disconnected</span>
+            {% block nav_status %}{% endblock %}
         </div>
     </nav>
 
@@ -25,7 +25,7 @@
     </main>
 
     <footer class="site-footer">
-        <span>Aerial Object Detection v0.1.2</span> &middot; <a href="https://github.com/djtrustgod/Aerial-Object-Detection" target="_blank" rel="noopener noreferrer">GitHub Project</a>
+        <span>Aerial Object Detection v0.2.0</span> &middot; <a href="https://github.com/djtrustgod/Aerial-Object-Detection" target="_blank" rel="noopener noreferrer">GitHub Project</a>
     </footer>
 
     {% block scripts %}{% endblock %}

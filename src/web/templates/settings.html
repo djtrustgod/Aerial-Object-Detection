@@ -361,11 +361,6 @@ async function updateStats() {
         document.getElementById('sys-frames').textContent = stats.frame_count;
         const camStatus = stats.connected;
         document.getElementById('sys-connected').textContent = camStatus ? 'Connected' : 'Disconnected';
-        const navEl = document.getElementById('connection-status');
-        if (navEl) {
-            navEl.textContent = camStatus ? 'Camera Connected' : 'No Camera';
-            navEl.className = `status-indicator ${camStatus ? 'online' : 'offline'}`;
-        }
     } catch (e) {}
 }
 setInterval(updateStats, 2000);

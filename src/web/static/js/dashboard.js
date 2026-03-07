@@ -182,6 +182,7 @@ async function pollStats() {
         if (fpsEl) fpsEl.textContent = `${stats.fps} FPS`;
         if (tracksEl) tracksEl.textContent = `${stats.active_tracks} tracks`;
         updateCameraStatus(stats.connected);
+        updateActiveDetections(stats.active_tracks);
 
         const detEl = document.getElementById('detection-toggle');
         if (detEl) {
@@ -229,6 +230,15 @@ function renderConnectionStatus() {
     }
 }
 
+function updateActiveDetections(count) {
+    if (!activeDetections) return;
+    if (count === 0) {
+        activeDetections.innerHTML = '<p class="empty-state">No active detections</p>';
+    } else {
+        activeDetections.innerHTML = `<div class="event-item"><span>${count} object${count !== 1 ? 's' : ''} currently tracked</span></div>`;
+    }
+}
+
 function scheduleReconnect() {
     if (reconnectTimer) return;
     reconnectTimer = setTimeout(() => {
@@ -237,12 +247,29 @@ function scheduleReconnect() {
     }, 3000);
 }
 
+// --- Load initial recent events from API ---
+async function loadRecentEvents() {
+    try {
+        const resp = await fetch('/api/events?limit=50');
+        const events = await resp.json();
+        eventBuffer = events.map(e => ({
+            type: 'detection',
+            event_id: e.event_id,
+            object_id: e.object_id,
+            speed: e.avg_speed,
+            trajectory_length: e.trajectory_length,
+        }));
+        renderEventFeed();
+    } catch (e) {}
+}
+
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
     if (canvas) {
         connectStream();
         connectEvents();
         initChart();
+        loadRecentEvents();
         setInterval(pollStats, 2000);
         pollStats();
     }

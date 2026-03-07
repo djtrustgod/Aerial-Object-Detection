@@ -25,6 +25,7 @@ body {
     background: var(--bg-primary);
     color: var(--text-primary);
     min-height: 100vh;
+    overflow-x: hidden;
 }
 
 /* Navbar */
@@ -128,7 +129,9 @@ body {
 /* Stream */
 #stream-canvas {
     width: 100%;
+    max-width: 100%;
     height: auto;
+    display: block;
     background: #000;
     border-radius: 4px;
 }
@@ -392,12 +395,96 @@ body {
     text-decoration: underline;
 }
 
-/* Responsive */
+/* Responsive — tablet and below */
 @media (max-width: 1024px) {
     .dashboard-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
+    }
+    .stream-card, .detections-card, .events-card, .chart-card {
+        grid-column: 1 !important;
+        grid-row: auto !important;
+    }
+    .settings-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* Responsive — phone */
+@media (max-width: 640px) {
+    .navbar {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 0.5rem 0.75rem;
+        gap: 0.4rem;
+    }
+    .nav-brand {
+        font-size: 0.95rem;
+        margin-right: auto;
+    }
+    .nav-status {
+        order: 2;
+        margin-left: 0;
+    }
+    .nav-links {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+        gap: 0.25rem;
+    }
+    .nav-link {
+        padding: 0.35rem 0.65rem;
+        font-size: 0.85rem;
+    }
+    .container {
+        padding: 0.75rem;
+    }
+    .card-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.6rem 0.75rem;
+    }
+    .card-header h2 {
+        font-size: 0.85rem;
+    }
+    .card-body {
+        padding: 0.75rem;
     }
     .settings-grid {
         grid-template-columns: 1fr;
+    }
+    .stream-controls {
+        flex-wrap: wrap;
+        gap: 0.3rem;
+    }
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+    }
+    /* History table: horizontal scroll on small screens */
+    .event-table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .event-table th,
+    .event-table td {
+        white-space: nowrap;
+        padding: 0.4rem 0.5rem;
+        font-size: 0.78rem;
+    }
+    .filter-controls {
+        flex-wrap: wrap;
+    }
+    .detection-list, .event-list {
+        max-height: 250px;
+    }
+    .event-item, .detection-item {
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        font-size: 0.85rem;
+    }
+    .modal-content {
+        width: 95%;
+        padding: 0.5rem;
     }
 }

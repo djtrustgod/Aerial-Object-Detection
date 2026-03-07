@@ -1,5 +1,5 @@
 capture:
-  rtsp_url: "rtsp://JoeChip:Runciter2024@192.168.145.3/stream1"
+  rtsp_url: "rtsp://JoeChip:Runciter2024@192.168.145.8/stream1"
   reconnect_delay: 5.0       # How long to wait (seconds) before retrying a lost camera connection
   grab_timeout: 10.0         # How long to wait (seconds) with no new frames before reconnecting
 
@@ -13,24 +13,24 @@ processing:
 
 detection:
   # Motion detection via frame differencing
-  diff_threshold: 18         # How different a pixel must be to count as motion (0–255, lower = more sensitive)
+  diff_threshold: 30         # How different a pixel must be to count as motion (0–255, lower = more sensitive)
   # Background learning (removes stationary background to isolate moving objects)
   mog2_history: 500          # How many past frames are used to learn what the background looks like
-  mog2_var_threshold: 25     # How much a pixel must differ from background to be flagged (lower = more sensitive)
+  mog2_var_threshold: 40     # How much a pixel must differ from background to be flagged (lower = more sensitive)
   mog2_detect_shadows: false # Whether to detect and exclude shadows — should be off for nighttime sky
   # Noise cleanup
   morph_kernel_size: 3       # Size of the filter used to clean up noisy detections (pixels)
-  morph_erode_iterations: 1  # How many passes of shrinking are applied to remove tiny noise blobs
+  morph_erode_iterations: 2  # How many passes of shrinking are applied to remove tiny noise blobs
   morph_dilate_iterations: 2 # How many passes of expanding are applied to fill gaps in detected objects
   # Object size filtering
-  min_contour_area: 4        # Smallest object size to consider (pixels²) — filters out single-pixel noise
+  min_contour_area: 15       # Smallest object size to consider (pixels²) — filters out single-pixel noise
   max_contour_area: 500      # Largest object size to consider (pixels²) — filters out clouds and large artifacts
-  min_circularity: 0.3       # How round an object must be (0–1) — filters out edge streaks and irregular shapes
+  min_circularity: 0.4       # How round an object must be (0–1) — filters out edge streaks and irregular shapes
 
 tracking:
   max_distance: 50           # How far (pixels) an object can move between frames and still be the same track
   max_disappeared: 10        # How many frames an object can go missing before its track is dropped
-  min_track_length: 5        # Minimum frames an object must be tracked before it is reported as a detection
+  min_track_length: 8        # Minimum frames an object must be tracked before it is reported as a detection
 
 recording:
   clip_pre_buffer: 3.0       # Seconds of footage saved before a detection event begins
