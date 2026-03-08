@@ -82,10 +82,23 @@ class EventLogger:
         return [self._row_to_event(row) for row in cursor.fetchall()]
 
     def get_stats(self) -> dict:
-        """Get summary statistics."""
+        """Get summary statistics including hourly breakdown for today."""
         cursor = self._conn.execute("SELECT COUNT(*) FROM events")
         total = cursor.fetchone()[0]
-        return {"total": total}
+
+        # Hourly event counts for today (local time)
+        hourly = [0] * 24
+        cursor = self._conn.execute(
+            "SELECT CAST(strftime('%H', start_time, 'unixepoch', 'localtime') AS INTEGER) AS hour,"
+            " COUNT(*) AS cnt"
+            " FROM events"
+            " WHERE date(start_time, 'unixepoch', 'localtime') = date('now', 'localtime')"
+            " GROUP BY hour"
+        )
+        for hour, cnt in cursor.fetchall():
+            hourly[hour] = cnt
+
+        return {"total": total, "hourly": hourly}
 
     def delete_by_ids(self, event_ids: list[int]) -> list[str]:
         """Delete specific events by ID. Returns clip_paths of deleted events."""

@@ -55,6 +55,9 @@ const MAX_EVENTS = 50;
 // Chart.js stats
 let statsChart = null;
 let totalDetections = 0;
+let hourlyData = new Array(24).fill(0);
+const HOUR_LABELS = ['00','01','02','03','04','05','06','07','08','09','10','11',
+                     '12','13','14','15','16','17','18','19','20','21','22','23'];
 
 function connectEvents() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -90,8 +93,10 @@ function handleEvent(data) {
         if (eventBuffer.length > MAX_EVENTS) eventBuffer.pop();
         renderEventFeed();
 
-        // Update chart
+        // Update chart — increment current hour's bar
         totalDetections++;
+        const currentHour = new Date().getHours();
+        hourlyData[currentHour]++;
         updateChart();
     }
 }
@@ -119,22 +124,36 @@ function initChart() {
     if (!chartCanvas) return;
 
     statsChart = new Chart(chartCanvas, {
-        type: 'doughnut',
+        type: 'bar',
         data: {
-            labels: ['Detections'],
+            labels: HOUR_LABELS,
             datasets: [{
-                data: [0],
-                backgroundColor: ['rgba(34, 197, 94, 0.7)'],
-                borderColor: ['rgba(34, 197, 94, 1)'],
+                label: 'Events',
+                data: hourlyData,
+                backgroundColor: 'rgba(34, 197, 94, 0.6)',
+                borderColor: 'rgba(34, 197, 94, 1)',
                 borderWidth: 1,
+                borderRadius: 2,
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: { color: '#94a3b8' },
+                legend: { display: false },
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#64748b', font: { size: 10 } },
+                    grid: { display: false },
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#64748b',
+                        precision: 0,
+                    },
+                    grid: { color: 'rgba(100, 116, 139, 0.15)' },
                 },
             },
         },
@@ -142,6 +161,8 @@ function initChart() {
 
     // Load initial stats
     loadInitialStats();
+    // Refresh hourly data every 60s to stay in sync
+    setInterval(loadInitialStats, 60000);
 }
 
 async function loadInitialStats() {
@@ -149,13 +170,16 @@ async function loadInitialStats() {
         const resp = await fetch('/api/event-stats');
         const stats = await resp.json();
         totalDetections = stats.total || 0;
+        if (stats.hourly) {
+            hourlyData = stats.hourly;
+        }
         updateChart();
     } catch (e) {}
 }
 
 function updateChart() {
     if (!statsChart) return;
-    statsChart.data.datasets[0].data = [totalDetections];
+    statsChart.data.datasets[0].data = hourlyData;
     statsChart.update();
 }
 
