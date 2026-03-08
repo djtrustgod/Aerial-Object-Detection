@@ -4,7 +4,7 @@
 
 # Aerial Object Detection
 
-Nighttime aerial object detection system using classical computer vision. Connects to RTSP cameras or video files, detects small moving lighted objects in the night sky, and serves a real-time web dashboard. Runs entirely on CPU with no deep learning dependencies.
+Nighttime aerial object detection system using classical computer vision. Connects to RTSP cameras or video files, detects small moving lighted objects such as aircraft, drones, bright satellites, meteors, and other objects in the night sky, and serves a real-time web dashboard. Runs entirely on CPU with no deep learning dependencies.
 
 ## Features
 
