@@ -12,6 +12,7 @@ from typing import Any, Callable
 
 import cv2
 import numpy as np
+import psutil
 
 from src.config import AppConfig, save_config_values
 from src.capture.stream import FrameGrabber
@@ -84,6 +85,7 @@ class Pipeline:
 
     @property
     def stats(self) -> dict[str, Any]:
+        mem = psutil.virtual_memory()
         return {
             "fps": round(self._fps_actual, 1),
             "frame_count": self._frame_count,
@@ -92,6 +94,8 @@ class Pipeline:
             "detection_active": self._detection_enabled and (self._schedule_override or self._is_in_schedule()),
             "schedule_enabled": self._config.schedule.enabled,
             "detection_enabled": self._detection_enabled,
+            "cpu_percent": psutil.cpu_percent(interval=None),
+            "mem_percent": mem.percent,
         }
 
     @property

@@ -54,6 +54,22 @@ body {
     flex-shrink: 0;
 }
 
+.nav-system {
+    display: flex;
+    gap: 0.4rem;
+    margin-right: auto;
+}
+
+.sys-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--bg-primary);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Courier New', monospace;
+}
+
 .nav-links {
     display: flex;
     gap: 0.5rem;
