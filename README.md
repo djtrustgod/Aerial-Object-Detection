@@ -17,7 +17,97 @@ Nighttime aerial object detection system using classical computer vision. Connec
 - Python 3.10+
 - An RTSP camera or video file for input
 
-## Installation
+## Docker Deployment (Recommended)
+
+The easiest way to run the system is with Docker. A single command builds and starts everything.
+
+### First Run
+
+```bash
+git clone https://github.com/your-username/Aerial-Object-Detection.git
+cd Aerial-Object-Detection
+RTSP_URL="rtsp://user:pass@camera-ip/stream1" docker compose up --build -d
+```
+
+The dashboard will be available at http://localhost:8080.
+
+On first start, the default configuration is automatically copied into the persistent data directory. No manual config setup is required.
+
+### Updating an Existing Installation
+
+Pull the latest code and rebuild. Your configuration and recorded data are stored outside the repo and will not be affected:
+
+```bash
+cd Aerial-Object-Detection
+git pull
+docker compose up --build -d
+```
+
+### Configuration
+
+You can set the RTSP URL in two ways:
+
+- **Environment variable** (no rebuild needed):
+  ```bash
+  RTSP_URL="rtsp://user:pass@camera-ip/stream1" docker compose up -d
+  ```
+
+- **Edit the config file** in the persistent data directory, then restart:
+  ```bash
+  # Edit the config (see "Data Location" below for the path)
+  docker compose restart
+  ```
+
+To change the web port:
+```bash
+WEB_PORT=9090 docker compose up -d
+```
+
+### Data Location
+
+All persistent data (config, clips, database, logs) is stored **outside the repo** at a location determined by your OS. You can override it with the `AERIAL_DATA` environment variable.
+
+| OS | Default path | Config file | Recorded clips |
+|---|---|---|---|
+| **Windows** | `C:\Users\<you>\aerial-detect-data\` | `...\config\default.yaml` | `...\data\clips\` |
+| **macOS** | `~/aerial-detect-data/` | `.../config/default.yaml` | `.../data/clips/` |
+| **Linux** | `~/aerial-detect-data/` | `.../config/default.yaml` | `.../data/clips/` |
+
+To use a custom location:
+```bash
+AERIAL_DATA=/mnt/storage/aerial docker compose up --build -d
+```
+
+The data directory contains:
+```
+aerial-detect-data/
+  config/
+    default.yaml          # Editable configuration
+  data/
+    clips/                # Recorded detection video clips
+    db/                   # SQLite detection database
+    logs/                 # Application logs
+```
+
+### Useful Commands
+
+```bash
+# View logs
+docker compose logs -f
+
+# Check container health
+docker compose ps
+
+# Stop the service
+docker compose down
+
+# Full rebuild (e.g. after dependency changes)
+docker compose up --build -d --force-recreate
+```
+
+## Manual Installation
+
+If you prefer to run without Docker:
 
 ```bash
 git clone https://github.com/your-username/Aerial-Object-Detection.git
