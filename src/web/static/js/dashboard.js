@@ -56,8 +56,26 @@ const MAX_EVENTS = 50;
 let statsChart = null;
 let totalDetections = 0;
 let hourlyData = new Array(24).fill(0);
-const HOUR_LABELS = ['00','01','02','03','04','05','06','07','08','09','10','11',
-                     '12','13','14','15','16','17','18','19','20','21','22','23'];
+let hourlySlots = [];  // rolling 24-hour slot keys like "2026-03-07 20"
+
+function buildHourlySlots() {
+    const slots = [];
+    const now = new Date();
+    // Start from 23 hours ago, build 24 slots up to current hour
+    for (let i = 23; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 3600000);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        slots.push(`${yyyy}-${mm}-${dd} ${hh}`);
+    }
+    return slots;
+}
+
+function getHourLabels(slots) {
+    return slots.map(s => s.slice(11, 13));  // extract "HH"
+}
 
 function connectEvents() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -95,8 +113,8 @@ function handleEvent(data) {
 
         // Update chart — increment current hour's bar
         totalDetections++;
-        const currentHour = new Date().getHours();
-        hourlyData[currentHour]++;
+        // Current hour is always the last slot in the rolling window
+        hourlyData[hourlyData.length - 1]++;
         updateChart();
     }
 }
@@ -123,10 +141,12 @@ function initChart() {
     const chartCanvas = document.getElementById('stats-chart');
     if (!chartCanvas) return;
 
+    hourlySlots = buildHourlySlots();
+
     statsChart = new Chart(chartCanvas, {
         type: 'bar',
         data: {
-            labels: HOUR_LABELS,
+            labels: getHourLabels(hourlySlots),
             datasets: [{
                 label: 'Events',
                 data: hourlyData,
@@ -170,8 +190,11 @@ async function loadInitialStats() {
         const resp = await fetch('/api/event-stats');
         const stats = await resp.json();
         totalDetections = stats.total || 0;
-        if (stats.hourly) {
-            hourlyData = stats.hourly;
+        // Rebuild slots in case hour has rolled over
+        hourlySlots = buildHourlySlots();
+        hourlyData = hourlySlots.map(slot => (stats.hourly_map && stats.hourly_map[slot]) || 0);
+        if (statsChart) {
+            statsChart.data.labels = getHourLabels(hourlySlots);
         }
         updateChart();
     } catch (e) {}
@@ -201,10 +224,6 @@ async function pollStats() {
         const resp = await fetch('/api/stats');
         const stats = await resp.json();
 
-        const fpsEl = document.getElementById('stream-fps');
-        const tracksEl = document.getElementById('stream-tracks');
-        if (fpsEl) fpsEl.textContent = `${stats.fps} FPS`;
-        if (tracksEl) tracksEl.textContent = `${stats.active_tracks} tracks`;
         updateCameraStatus(stats.connected);
         updateActiveDetections(stats.active_tracks);
 
