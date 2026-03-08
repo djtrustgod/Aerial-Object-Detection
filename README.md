@@ -49,7 +49,7 @@ docker compose up --build -d
 
 ### Configuration
 
-You can set the RTSP URL in two ways:
+You can set the RTSP URL in three ways:
 
 - **Environment variable** (no rebuild needed):
   ```bash
@@ -61,6 +61,8 @@ You can set the RTSP URL in two ways:
   # Edit the config (see "Data Location" below for the path)
   docker compose restart
   ```
+
+- **Web dashboard Settings page** — change the RTSP URL live from the browser at http://localhost:8080 without restarting the container
 
 To change the web port:
 ```bash
