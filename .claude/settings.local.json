@@ -10,7 +10,9 @@
       "Bash(netstat:*)",
       "Bash(powershell:*)",
       "Bash(curl:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git:*)",
+      "Bash(docker compose:*)"
     ]
   }
 }
