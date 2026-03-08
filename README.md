@@ -6,6 +6,17 @@
 
 Nighttime aerial object detection system using classical computer vision. Connects to RTSP cameras or video files, detects small moving lighted objects such as aircraft, drones, bright satellites, meteors, and other objects in the night sky, and serves a real-time web dashboard. Runs entirely on CPU with no deep learning dependencies.
 
+## Screenshots
+
+### Dashboard
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Detection History
+![History](docs/screenshots/history.png)
+
+### Settings
+![Settings](docs/screenshots/settings.png)
+
 ## Features
 
 - **Real-time RTSP streaming** with automatic reconnection
