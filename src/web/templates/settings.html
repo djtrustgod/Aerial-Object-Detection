@@ -39,8 +39,14 @@
             <form id="camera-form" onsubmit="return saveSection(event, '/api/settings/general', 'camera-status')">
                 <div class="form-group">
                     <label>RTSP Camera Address</label>
-                    <small class="field-hint">Enter the full camera stream URL (e.g. rtsp://user:pass@192.168.1.100/stream)</small>
-                    <input type="text" name="rtsp_url" value="{{ config.capture.rtsp_url }}" placeholder="rtsp://user:pass@host/stream">
+                    <small class="field-hint">
+                        Accepted formats:<br>
+                        &bull; rtsp://192.168.1.100/stream1<br>
+                        &bull; rtsp://192.168.1.100:554/stream1<br>
+                        &bull; rtsp://user:pass@192.168.1.100/stream1<br>
+                        &bull; rtsp://user:pass@192.168.1.100:554/stream1
+                    </small>
+                    <input type="text" name="rtsp_url" value="{{ config.capture.rtsp_url }}" placeholder="rtsp://192.168.1.100/stream1">
                 </div>
                 <div class="form-group">
                     <label>Reconnect Delay (seconds)</label>

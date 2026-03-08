@@ -47,6 +47,7 @@ class Pipeline:
             clip_dir=config.recording.clip_dir,
             pre_buffer_seconds=config.recording.clip_pre_buffer,
             post_buffer_seconds=config.recording.clip_post_buffer,
+            full_resolution=config.recording.clip_full_resolution,
         )
         self._event_logger = EventLogger(config.recording.db_path)
 
@@ -243,7 +244,8 @@ class Pipeline:
                 # Still feed the clip writer for continuous recording
                 display = self._preprocessor.resize_only(frame)
                 self._stamp_timestamp(display)
-                self._clip_writer.feed_frame(display)
+                raw_annotated = self._annotate_fullres(frame, {})
+                self._clip_writer.feed_frame(display, raw_annotated)
                 continue
 
             self._frame_count += 1
@@ -281,8 +283,9 @@ class Pipeline:
             # Draw overlays on display frame (includes timestamp)
             annotated = self._draw_overlays(display, tracks)
 
-            # Feed clip writer with annotated frame
-            self._clip_writer.feed_frame(annotated)
+            # Feed clip writer with annotated frame + full-res version
+            raw_annotated = self._annotate_fullres(frame, tracks)
+            self._clip_writer.feed_frame(annotated, raw_annotated)
             with self._display_lock:
                 # Discard if URL changed while this frame was being processed
                 if self._url_version == url_ver:
@@ -332,6 +335,36 @@ class Pipeline:
         ts = datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
         cv2.putText(frame, ts, (10, frame.shape[0] - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
+
+    def _annotate_fullres(self, frame: np.ndarray,
+                          tracks: dict[int, TrackedObject]) -> np.ndarray:
+        """Draw bounding boxes and timestamp on a full-resolution frame."""
+        annotated = frame.copy()
+        h, w = annotated.shape[:2]
+        sx = w / self._config.processing.resize_width
+        sy = h / self._config.processing.resize_height
+        scale = (sx + sy) / 2
+        color = (0, 255, 0)
+
+        for obj in tracks.values():
+            cx, cy = obj.centroid
+            # Draw a box around the detection, scaled to full resolution
+            box_half = int(15 * scale)
+            x1 = int(cx * sx) - box_half
+            y1 = int(cy * sy) - box_half
+            x2 = int(cx * sx) + box_half
+            y2 = int(cy * sy) + box_half
+            cv2.rectangle(annotated, (x1, y1), (x2, y2),
+                          color, max(1, int(scale)))
+
+        # Timestamp
+        ts = datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
+        font_scale = 0.45 * scale
+        thickness = max(1, int(scale))
+        cv2.putText(annotated, ts, (int(10 * sx), h - int(10 * sy)),
+                    cv2.FONT_HERSHEY_SIMPLEX, font_scale,
+                    (255, 255, 255), thickness, cv2.LINE_AA)
+        return annotated
 
     def _publish_event(self, obj: TrackedObject,
                        clip_path: str | None) -> None:

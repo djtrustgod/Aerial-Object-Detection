@@ -1,5 +1,5 @@
 capture:
-  rtsp_url: "rtsp://JoeChip:Runciter2024@192.168.145.8/stream1"
+  rtsp_url: ""
   reconnect_delay: 5.0       # How long to wait (seconds) before retrying a lost camera connection
   grab_timeout: 10.0         # How long to wait (seconds) with no new frames before reconnecting
 
@@ -39,12 +39,13 @@ recording:
   db_path: "data/db/detections.db"  # Path to the database file used for logging detection events
   log_dir: "data/logs"       # Folder where application log files are written
   jpeg_quality: 70           # Image quality for saved frames (1–100, higher = better quality, larger files)
+  clip_full_resolution: true # Save clips at native camera resolution instead of downscaled 640x360
 
 web:
   host: "0.0.0.0"            # Network address to listen on — 0.0.0.0 makes the dashboard accessible on all interfaces
   port: 8080                 # Port the web dashboard runs on
   stream_fps: 10             # Maximum frames per second delivered to the live stream preview
-  stream_quality: 70         # Image quality for the live stream preview (1–100)
+  stream_quality: 85         # Image quality for the live stream preview (1–100)
 
 schedule:
   enabled: true             # When true, detection only runs within the time window below

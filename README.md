@@ -27,25 +27,44 @@ pip install -e ".[dev]"
 
 ## Quick Start
 
-```bash
-# Run with an RTSP camera
-python -m src.main -u rtsp://user:pass@192.168.1.100:554/stream1
+1. **Set your camera URL** — create `config/local.yaml` (gitignored) with your RTSP address:
 
-# Run with a local video file
-python -m src.main -u path/to/video.mp4
+    ```yaml
+    capture:
+      rtsp_url: "rtsp://192.168.1.100/stream1"
+    ```
 
-# Custom config, host, and port
-python -m src.main -c config/default.yaml -u rtsp://... --host 0.0.0.0 --port 9090
+    Supported URL formats:
+    - `rtsp://192.168.1.100/stream1` — no auth
+    - `rtsp://192.168.1.100:554/stream1` — custom port
+    - `rtsp://user:pass@192.168.1.100/stream1` — with credentials
+    - `rtsp://user:pass@192.168.1.100:554/stream1` — credentials + port
 
-# Verbose logging
-python -m src.main -u rtsp://... -v
-```
+    You can also pass the URL via CLI flag or environment variable (see below).
 
-Once running, open `http://localhost:8080` in your browser to view the dashboard.
+2. **Run the server:**
+
+    ```bash
+    # Using local.yaml config
+    python -m src.main -v
+
+    # Or pass the URL directly
+    python -m src.main -u rtsp://192.168.1.100/stream1
+
+    # Or use a local video file
+    python -m src.main -u path/to/video.mp4
+
+    # Custom host and port
+    python -m src.main --host 0.0.0.0 --port 9090
+    ```
+
+3. Open `http://localhost:8080` in your browser to view the dashboard.
 
 ## Configuration
 
-All parameters are in [config/default.yaml](config/default.yaml). Key sections:
+All parameters are in [config/default.yaml](config/default.yaml). To override settings locally without committing changes, create `config/local.yaml` — it is loaded on top of the defaults and is gitignored. You can also use environment variables (`RTSP_URL`, `WEB_HOST`, `WEB_PORT`).
+
+Key sections:
 
 | Section | Description |
 |---|---|
@@ -84,7 +103,8 @@ Web Dashboard (FastAPI + WebSocket MJPEG stream)
 ## Project Structure
 
 ```
-config/default.yaml          # All tunable parameters
+config/default.yaml          # All tunable parameters (committed)
+config/local.yaml            # Local overrides, e.g. RTSP URL (gitignored)
 src/
   main.py                    # CLI entry point
   config.py                  # Dataclass-based YAML config loader

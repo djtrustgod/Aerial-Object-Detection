@@ -56,6 +56,7 @@ class RecordingConfig:
     db_path: str = "data/db/detections.db"
     log_dir: str = "data/logs"
     jpeg_quality: int = 70
+    clip_full_resolution: bool = True
 
 
 @dataclass
@@ -99,23 +100,25 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         path = os.environ.get("CONFIG_PATH", "config/default.yaml")
 
     path = Path(path)
-    if path.exists():
-        with open(path, "r") as f:
-            raw = yaml.safe_load(f) or {}
 
-        section_map = {
-            "capture": config.capture,
-            "processing": config.processing,
-            "detection": config.detection,
-            "tracking": config.tracking,
-            "recording": config.recording,
-            "web": config.web,
-            "schedule": config.schedule,
-        }
+    section_map = {
+        "capture": config.capture,
+        "processing": config.processing,
+        "detection": config.detection,
+        "tracking": config.tracking,
+        "recording": config.recording,
+        "web": config.web,
+        "schedule": config.schedule,
+    }
 
-        for section_name, dc_instance in section_map.items():
-            if section_name in raw and isinstance(raw[section_name], dict):
-                _apply_dict(dc_instance, raw[section_name])
+    # Load default config, then overlay local.yaml on top
+    for yaml_path in [path, path.parent / "local.yaml"]:
+        if yaml_path.exists():
+            with open(yaml_path, "r") as f:
+                raw = yaml.safe_load(f) or {}
+            for section_name, dc_instance in section_map.items():
+                if section_name in raw and isinstance(raw[section_name], dict):
+                    _apply_dict(dc_instance, raw[section_name])
 
     # Environment variable overrides
     env_url = os.environ.get("RTSP_URL")
