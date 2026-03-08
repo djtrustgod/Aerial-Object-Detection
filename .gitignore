@@ -12,9 +12,7 @@ config/local.yaml
 venv/
 env/
 
-data/clips/
-data/db/
-data/logs/
+data/
 
 *.mp4
 *.avi
