@@ -24,6 +24,7 @@ Nighttime aerial object detection system using classical computer vision. Connec
 - **Centroid-based object tracking** across frames with automatic track lifecycle management
 - **Event recording** with pre/post-event buffered video clips and SQLite event logging
 - **Web dashboard** with live MJPEG stream via WebSocket, detection history, and statistics (Chart.js)
+- **Exclusion zones** — draw rectangular zones on a live camera snapshot to suppress false positives from trees, lights, roads, etc. Zones persist across restarts and appear as red overlays on the live stream
 - **Detection scheduling** with configurable time windows and manual override toggle
 - **Fully configurable** via YAML with CLI overrides and live settings from the dashboard
 
@@ -198,6 +199,9 @@ Preprocessing (resize, CLAHE, Gaussian blur)
 Detection (frame diff + MOG2 -> morphology -> contour filtering)
     |
     v
+Exclusion Zone Filtering (suppress detections in masked areas)
+    |
+    v
 Tracking (centroid matching across frames)
     |
     v
@@ -212,10 +216,12 @@ Web Dashboard (FastAPI + WebSocket MJPEG stream)
 ```
 config/default.yaml          # All tunable parameters (committed)
 config/local.yaml            # Local overrides, e.g. RTSP URL (gitignored)
+config/zones.json            # Exclusion zones (auto-created at runtime)
 src/
   main.py                    # CLI entry point
   config.py                  # Dataclass-based YAML config loader
   pipeline.py                # Orchestrator (grab, process, record, serve)
+  zones.py                   # Exclusion zone load/save/query helpers
   capture/stream.py          # Threaded RTSP frame grabber
   processing/
     preprocessor.py          # Resize, CLAHE, blur
@@ -229,7 +235,7 @@ src/
     app.py                   # FastAPI application factory
     routes.py                # HTTP routes
     websocket.py             # Live MJPEG stream over WebSocket
-    templates/               # Jinja2 templates (dashboard, history, settings)
+    templates/               # Jinja2 templates (dashboard, history, settings, zones)
     static/                  # CSS and JS assets
 tests/                       # Unit tests (11 tests)
 ```

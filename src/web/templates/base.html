@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Aerial Detection{% endblock %}</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
-    <link rel="stylesheet" href="/static/css/dashboard.css?v=0.2.2">
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=0.3.0">
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -19,6 +19,7 @@
             <a href="/" class="nav-link{% if request.url.path == '/' %} active{% endif %}">Dashboard</a>
             <a href="/history" class="nav-link{% if request.url.path == '/history' %} active{% endif %}">History</a>
             <a href="/settings" class="nav-link{% if request.url.path == '/settings' %} active{% endif %}">Settings</a>
+            <a href="/zones" class="nav-link{% if request.url.path == '/zones' %} active{% endif %}">Zones</a>
         </div>
         <div class="nav-status">
             {% block nav_status %}{% endblock %}
@@ -30,7 +31,7 @@
     </main>
 
     <footer class="site-footer">
-        <span>Aerial Object Detection v0.2.2</span> &middot; <a href="https://github.com/djtrustgod/Aerial-Object-Detection" target="_blank" rel="noopener noreferrer">GitHub Project</a>
+        <span>Aerial Object Detection v0.3.0</span> &middot; <a href="https://github.com/djtrustgod/Aerial-Object-Detection" target="_blank" rel="noopener noreferrer">GitHub Project</a>
     </footer>
 
     <script>

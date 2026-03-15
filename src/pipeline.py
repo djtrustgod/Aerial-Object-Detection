@@ -15,6 +15,7 @@ import numpy as np
 import psutil
 
 from src.config import AppConfig, save_config_values
+from src.zones import load_zones, save_zones, point_in_any_zone
 from src.capture.stream import FrameGrabber
 from src.processing.preprocessor import Preprocessor
 from src.processing.detector import Detector
@@ -75,6 +76,9 @@ class Pipeline:
         self._detection_enabled: bool = True
         # When True, _detection_enabled bypasses the schedule check entirely
         self._schedule_override: bool = False
+
+        # Exclusion zones
+        self._exclusion_zones: list[dict] = load_zones()
 
     @property
     def display_frame(self) -> np.ndarray | None:
@@ -223,6 +227,7 @@ class Pipeline:
         skip_counter = 0
         fps_timer = time.monotonic()
         fps_frame_count = 0
+        was_active = False
 
         # Set FPS on components once connected
         fps_set = False
@@ -242,36 +247,42 @@ class Pipeline:
                 self._clip_writer.fps = self._grabber.fps
                 fps_set = True
 
-            # Frame skipping
+            # Compute detection state once per iteration
+            in_schedule = self._detection_enabled and (self._schedule_override or self._is_in_schedule())
+
+            # Flush clip writer on active → idle transition
+            if was_active and not in_schedule:
+                self._clip_writer.flush()
+            was_active = in_schedule
+
+            # Frame skipping (doubled when idle to save CPU)
             skip_counter += 1
-            if skip_counter % frame_skip != 0:
-                # Still feed the clip writer for continuous recording
-                display = self._preprocessor.resize_only(frame)
-                self._stamp_timestamp(display)
-                raw_annotated = self._annotate_fullres(frame, {})
-                self._clip_writer.feed_frame(display, raw_annotated)
+            effective_skip = frame_skip if in_schedule else frame_skip * 2
+            if skip_counter % effective_skip != 0:
+                if in_schedule:
+                    # Still feed the clip writer for continuous recording
+                    display = self._preprocessor.resize_only(frame)
+                    self._stamp_timestamp(display)
+                    raw_annotated = self._annotate_fullres(frame, {})
+                    self._clip_writer.feed_frame(display, raw_annotated)
+                else:
+                    time.sleep(0.001)  # yield CPU when idle
                 continue
 
             self._frame_count += 1
-            timestamp = time.time()
-
-            # Preprocess
-            gray = self._preprocessor.process(frame)
             display = self._preprocessor.resize_only(frame)
 
-            # Detect — manual toggle gates first; override flag bypasses schedule
-            in_schedule = self._detection_enabled and (self._schedule_override or self._is_in_schedule())
-
             if in_schedule:
+                # Active path: full pipeline
+                timestamp = time.time()
+                gray = self._preprocessor.process(frame)
                 detections = self._detector.detect(gray, frame_num, timestamp)
-            else:
-                detections = []
+                if self._exclusion_zones:
+                    detections = [d for d in detections
+                                  if not point_in_any_zone(d.x, d.y, self._exclusion_zones)]
+                tracks = self._tracker.update(detections)
+                self._active_tracks = len(tracks)
 
-            # Track (empty list ages out stale tracks naturally)
-            tracks = self._tracker.update(detections)
-            self._active_tracks = len(tracks)
-
-            if in_schedule:
                 # Check for completed tracks (were active, now gone)
                 mature = self._tracker.mature_objects
                 current_ids = set(tracks.keys())
@@ -284,12 +295,14 @@ class Pipeline:
                     for oid, obj in mature.items():
                         self._publish_event(obj, clip_path)
 
-            # Draw overlays on display frame (includes timestamp)
-            annotated = self._draw_overlays(display, tracks)
+                annotated = self._draw_overlays(display, tracks)
+                raw_annotated = self._annotate_fullres(frame, tracks)
+                self._clip_writer.feed_frame(annotated, raw_annotated)
+            else:
+                # Idle path: HUD only, no preprocessing/tracking/recording
+                self._active_tracks = 0
+                annotated = self._draw_overlays(display, {})
 
-            # Feed clip writer with annotated frame + full-res version
-            raw_annotated = self._annotate_fullres(frame, tracks)
-            self._clip_writer.feed_frame(annotated, raw_annotated)
             with self._display_lock:
                 # Discard if URL changed while this frame was being processed
                 if self._url_version == url_ver:
@@ -324,6 +337,19 @@ class Pipeline:
             # Label
             cv2.putText(annotated, f"#{oid}", (cx + 10, cy - 5),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+
+        # Exclusion zone overlays
+        if self._exclusion_zones:
+            overlay = annotated.copy()
+            for z in self._exclusion_zones:
+                x1, y1 = z["x"], z["y"]
+                x2, y2 = x1 + z["w"], y1 + z["h"]
+                cv2.rectangle(overlay, (x1, y1), (x2, y2), (0, 0, 255), -1)
+            cv2.addWeighted(overlay, 0.25, annotated, 0.75, 0, annotated)
+            for z in self._exclusion_zones:
+                x1, y1 = z["x"], z["y"]
+                x2, y2 = x1 + z["w"], y1 + z["h"]
+                cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 255), 1)
 
         # HUD overlay
         cv2.putText(annotated, f"FPS: {self._fps_actual:.1f}",
@@ -425,3 +451,26 @@ class Pipeline:
                     callback(event_data)
             except Exception:
                 logger.exception("Error in event callback")
+
+    # --- Exclusion zones ---
+
+    def get_zones(self) -> list[dict]:
+        return list(self._exclusion_zones)
+
+    def set_zones(self, zones: list[dict]) -> None:
+        self._exclusion_zones = zones
+        save_zones(zones)
+
+    def add_zone(self, zone: dict) -> None:
+        zones = list(self._exclusion_zones)
+        zones.append(zone)
+        self._exclusion_zones = zones
+        save_zones(zones)
+
+    def delete_zone(self, zone_id: str) -> bool:
+        zones = [z for z in self._exclusion_zones if z["id"] != zone_id]
+        if len(zones) == len(self._exclusion_zones):
+            return False
+        self._exclusion_zones = zones
+        save_zones(zones)
+        return True

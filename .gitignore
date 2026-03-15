@@ -8,6 +8,7 @@ build/
 
 .env
 config/local.yaml
+config/zones.json
 .venv/
 venv/
 env/

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 
+import cv2
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from src.pipeline import Pipeline
@@ -197,5 +199,46 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
         pipeline.update_schedule_config(**typed)
         pipeline.persist_config_values(typed)
         return JSONResponse({"status": "ok", "updated": typed})
+
+    # --- Snapshot & Exclusion Zones ---
+
+    @router.get("/api/snapshot")
+    async def api_snapshot():
+        frame = pipeline.display_frame
+        if frame is None:
+            return Response(status_code=503, content="No frame available")
+        _, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        return Response(content=jpeg.tobytes(), media_type="image/jpeg")
+
+    @router.get("/api/zones")
+    async def api_get_zones():
+        return JSONResponse(pipeline.get_zones())
+
+    @router.post("/api/zones")
+    async def api_create_zone(request: Request):
+        body = await request.json()
+        zone = {
+            "id": secrets.token_hex(4),
+            "x": int(body["x"]),
+            "y": int(body["y"]),
+            "w": int(body["w"]),
+            "h": int(body["h"]),
+            "label": body.get("label", ""),
+        }
+        pipeline.add_zone(zone)
+        return JSONResponse(zone, status_code=201)
+
+    @router.delete("/api/zones/{zone_id}")
+    async def api_delete_zone(zone_id: str):
+        if not pipeline.delete_zone(zone_id):
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return JSONResponse({"status": "ok"})
+
+    @router.get("/zones")
+    async def zones_page(request: Request):
+        return templates.TemplateResponse("zones.html", {
+            "request": request,
+            "zones": pipeline.get_zones(),
+        })
 
     return router

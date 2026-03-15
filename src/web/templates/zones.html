@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Exclusion Zones — Aerial Detection{% endblock %}
+
+{% block content %}
+<div class="zone-editor-layout">
+    <!-- Canvas area -->
+    <div class="card">
+        <div class="card-header">
+            <h2>Exclusion Zone Editor</h2>
+            <span class="badge" id="zone-count">{{ zones|length }} zone{{ 's' if zones|length != 1 }}</span>
+        </div>
+        <div class="card-body" style="padding:0; position:relative;">
+            <div class="zone-canvas-wrapper">
+                <canvas id="zone-canvas" width="640" height="360"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zone list -->
+    <div class="card">
+        <div class="card-header">
+            <h2>Active Zones</h2>
+        </div>
+        <div class="card-body">
+            <p class="zone-hint">Click and drag on the camera view to draw an exclusion zone.</p>
+            <div id="zone-list" class="zone-list"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const canvas = document.getElementById('zone-canvas');
+    const ctx = canvas.getContext('2d');
+    let zones = {{ zones | tojson }};
+    let bgImage = null;
+    let drawing = false;
+    let startX = 0, startY = 0, curX = 0, curY = 0;
+
+    function canvasCoords(e) {
+        const r = canvas.getBoundingClientRect();
+        return {
+            x: Math.round((e.clientX - r.left) * (canvas.width / r.width)),
+            y: Math.round((e.clientY - r.top) * (canvas.height / r.height))
+        };
+    }
+
+    function loadSnapshot() {
+        const img = new Image();
+        img.onload = function() { bgImage = img; render(); };
+        img.onerror = function() {
+            bgImage = null;
+            render();
+            setTimeout(loadSnapshot, 3000);
+        };
+        img.src = '/api/snapshot?' + Date.now();
+    }
+
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (bgImage) {
+            ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+        } else {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#666';
+            ctx.font = '16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('No camera frame available', canvas.width / 2, canvas.height / 2);
+            ctx.textAlign = 'start';
+        }
+
+        // Draw existing zones
+        for (const z of zones) {
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+            ctx.fillRect(z.x, z.y, z.w, z.h);
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(z.x, z.y, z.w, z.h);
+            if (z.label) {
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(z.x, z.y - 18, ctx.measureText(z.label).width + 8, 18);
+                ctx.fillStyle = '#fff';
+                ctx.font = '12px sans-serif';
+                ctx.fillText(z.label, z.x + 4, z.y - 5);
+            }
+        }
+
+        // Rubber-band while drawing
+        if (drawing) {
+            const rx = Math.min(startX, curX), ry = Math.min(startY, curY);
+            const rw = Math.abs(curX - startX), rh = Math.abs(curY - startY);
+            ctx.setLineDash([6, 4]);
+            ctx.strokeStyle = '#eab308';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(rx, ry, rw, rh);
+            ctx.setLineDash([]);
+        }
+    }
+
+    canvas.addEventListener('mousedown', function(e) {
+        const c = canvasCoords(e);
+        drawing = true;
+        startX = curX = c.x;
+        startY = curY = c.y;
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+        if (!drawing) return;
+        const c = canvasCoords(e);
+        curX = c.x;
+        curY = c.y;
+        render();
+    });
+
+    canvas.addEventListener('mouseup', function(e) {
+        if (!drawing) return;
+        drawing = false;
+        const c = canvasCoords(e);
+        const x = Math.min(startX, c.x), y = Math.min(startY, c.y);
+        const w = Math.abs(c.x - startX), h = Math.abs(c.y - startY);
+        if (w < 10 || h < 10) { render(); return; }  // too small
+
+        const label = prompt('Zone label (optional):') || '';
+        createZone(x, y, w, h, label);
+    });
+
+    // Prevent context menu on canvas
+    canvas.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+
+    async function createZone(x, y, w, h, label) {
+        const resp = await fetch('/api/zones', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({x, y, w, h, label})
+        });
+        if (resp.ok) {
+            const zone = await resp.json();
+            zones.push(zone);
+            render();
+            renderList();
+        }
+    }
+
+    async function deleteZone(id) {
+        const resp = await fetch('/api/zones/' + id, {method: 'DELETE'});
+        if (resp.ok) {
+            zones = zones.filter(z => z.id !== id);
+            render();
+            renderList();
+        }
+    }
+
+    function renderList() {
+        const container = document.getElementById('zone-list');
+        const badge = document.getElementById('zone-count');
+        badge.textContent = zones.length + ' zone' + (zones.length !== 1 ? 's' : '');
+
+        if (zones.length === 0) {
+            container.innerHTML = '<p class="empty-state">No exclusion zones defined.</p>';
+            return;
+        }
+        container.innerHTML = zones.map(z =>
+            '<div class="zone-item">' +
+                '<span class="zone-item-label">' + (z.label || '(unlabeled)') + '</span>' +
+                '<span class="zone-item-coords">' + z.x + ', ' + z.y + ' — ' + z.w + '×' + z.h + '</span>' +
+                '<button class="btn btn-danger btn-small" onclick="window.__deleteZone(\'' + z.id + '\')">Delete</button>' +
+            '</div>'
+        ).join('');
+    }
+
+    window.__deleteZone = deleteZone;
+
+    // Refresh snapshot periodically
+    setInterval(loadSnapshot, 5000);
+    loadSnapshot();
+    renderList();
+})();
+</script>
+{% endblock %}
