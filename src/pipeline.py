@@ -148,8 +148,14 @@ class Pipeline:
             self._display_frame = None
 
     def persist_rtsp_url(self, url: str) -> None:
-        """Write the RTSP URL to the config file on disk."""
-        save_config_values({"rtsp_url": url}, self._config_path)
+        """Write the RTSP URL to local.yaml (keeps credentials out of default.yaml)."""
+        from pathlib import Path
+        local_path = Path(self._config_path or "config/default.yaml").parent / "local.yaml"
+        # Ensure local.yaml exists with the capture section
+        if not local_path.exists():
+            local_path.write_text(f'capture:\n  rtsp_url: "{url}"\n')
+        else:
+            save_config_values({"rtsp_url": url}, local_path)
 
     def persist_config_values(self, data: dict) -> None:
         """Write arbitrary key/value pairs to the config file on disk."""
