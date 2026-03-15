@@ -217,12 +217,23 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
     @router.post("/api/zones")
     async def api_create_zone(request: Request):
         body = await request.json()
+        x, y = int(body["x"]), int(body["y"])
+        w, h = int(body["w"]), int(body["h"])
+        # Snap edges within 10px of frame boundary to be flush
+        frame_w = pipeline.config.processing.resize_width
+        frame_h = pipeline.config.processing.resize_height
+        snap = 10
+        if x <= snap:
+            w += x; x = 0
+        if y <= snap:
+            h += y; y = 0
+        if x + w >= frame_w - snap:
+            w = frame_w - x
+        if y + h >= frame_h - snap:
+            h = frame_h - y
         zone = {
             "id": secrets.token_hex(4),
-            "x": int(body["x"]),
-            "y": int(body["y"]),
-            "w": int(body["w"]),
-            "h": int(body["h"]),
+            "x": x, "y": y, "w": w, "h": h,
             "label": body.get("label", ""),
         }
         pipeline.add_zone(zone)

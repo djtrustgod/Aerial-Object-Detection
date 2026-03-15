@@ -115,16 +115,27 @@
         render();
     });
 
+    function snapToEdge(x, y, w, h) {
+        // Snap edges within 10px of canvas boundary to be flush
+        const SNAP = 10;
+        if (x <= SNAP) { w += x; x = 0; }
+        if (y <= SNAP) { h += y; y = 0; }
+        if (x + w >= canvas.width - SNAP) { w = canvas.width - x; }
+        if (y + h >= canvas.height - SNAP) { h = canvas.height - y; }
+        return {x, y, w, h};
+    }
+
     canvas.addEventListener('mouseup', function(e) {
         if (!drawing) return;
         drawing = false;
         const c = canvasCoords(e);
-        const x = Math.min(startX, c.x), y = Math.min(startY, c.y);
-        const w = Math.abs(c.x - startX), h = Math.abs(c.y - startY);
+        let x = Math.min(startX, c.x), y = Math.min(startY, c.y);
+        let w = Math.abs(c.x - startX), h = Math.abs(c.y - startY);
         if (w < 10 || h < 10) { render(); return; }  // too small
 
+        const snapped = snapToEdge(x, y, w, h);
         const label = prompt('Zone label (optional):') || '';
-        createZone(x, y, w, h, label);
+        createZone(snapped.x, snapped.y, snapped.w, snapped.h, label);
     });
 
     // Prevent context menu on canvas
