@@ -27,3 +27,11 @@ When the user says **"run dev"**, **"run"**, or similar, do the following:
 6. Report success (200 OK) and remind the user the dashboard is at http://localhost:8080.
 
 **Note:** The RTSP stream URL in `config/default.yaml` is a placeholder — the web dashboard works regardless.
+
+## Version Bumps
+
+When asked to update the version, update **all** of the following locations:
+
+- `pyproject.toml` — `version = "x.y.z"`
+- `src/web/app.py` — `FastAPI(..., version="x.y.z")`
+- `src/web/templates/base.html` — footer text (`vx.y.z`) and CSS cache-buster query string (`?v=x.y.z`)
