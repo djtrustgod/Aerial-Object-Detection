@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aerial-object-detection"
-version = "0.3.0"
+version = "0.3.1"
 description = "Nighttime aerial object detection system using classical computer vision"
 requires-python = ">=3.10"
 dependencies = [

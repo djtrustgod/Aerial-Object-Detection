@@ -239,88 +239,93 @@ class Pipeline:
         fps_set = False
 
         while self._running:
-            url_ver = self._url_version
-            frame, frame_num = self._grabber.get_frame()
-            if frame is None:
-                self._fps_actual = 0.0
-                fps_frame_count = 0
-                fps_timer = time.monotonic()
-                time.sleep(0.01)
-                continue
+            try:
+                url_ver = self._url_version
+                frame, frame_num = self._grabber.get_frame()
+                if frame is None:
+                    self._fps_actual = 0.0
+                    fps_frame_count = 0
+                    fps_timer = time.monotonic()
+                    time.sleep(0.01)
+                    continue
 
-            # Set FPS from stream on first frame
-            if not fps_set and self._grabber.is_connected:
-                self._clip_writer.fps = self._grabber.fps
-                fps_set = True
+                # Set FPS from stream on first frame
+                if not fps_set and self._grabber.is_connected:
+                    self._clip_writer.fps = self._grabber.fps
+                    fps_set = True
 
-            # Compute detection state once per iteration
-            in_schedule = self._detection_enabled and (self._schedule_override or self._is_in_schedule())
+                # Compute detection state once per iteration
+                in_schedule = self._detection_enabled and (self._schedule_override or self._is_in_schedule())
 
-            # Flush clip writer on active → idle transition
-            if was_active and not in_schedule:
-                self._clip_writer.flush()
-            was_active = in_schedule
+                # Flush clip writer on active → idle transition
+                if was_active and not in_schedule:
+                    self._clip_writer.flush()
+                was_active = in_schedule
 
-            # Frame skipping (doubled when idle to save CPU)
-            skip_counter += 1
-            effective_skip = frame_skip if in_schedule else frame_skip * 2
-            if skip_counter % effective_skip != 0:
+                # Frame skipping (doubled when idle to save CPU)
+                skip_counter += 1
+                effective_skip = frame_skip if in_schedule else frame_skip * 2
+                if skip_counter % effective_skip != 0:
+                    if in_schedule:
+                        # Still feed the clip writer for continuous recording
+                        display = self._preprocessor.resize_only(frame)
+                        self._stamp_timestamp(display)
+                        raw_annotated = self._annotate_fullres(frame, {})
+                        self._clip_writer.feed_frame(display, raw_annotated)
+                    else:
+                        time.sleep(0.001)  # yield CPU when idle
+                    continue
+
+                self._frame_count += 1
+                display = self._preprocessor.resize_only(frame)
+
                 if in_schedule:
-                    # Still feed the clip writer for continuous recording
-                    display = self._preprocessor.resize_only(frame)
-                    self._stamp_timestamp(display)
-                    raw_annotated = self._annotate_fullres(frame, {})
-                    self._clip_writer.feed_frame(display, raw_annotated)
+                    # Active path: full pipeline
+                    timestamp = time.time()
+                    gray = self._preprocessor.process(frame)
+                    detections = self._detector.detect(gray, frame_num, timestamp)
+                    if self._exclusion_zones:
+                        detections = [d for d in detections
+                                      if not point_in_any_zone(d.x, d.y, self._exclusion_zones)]
+                    tracks = self._tracker.update(detections)
+                    self._active_tracks = len(tracks)
+
+                    # Check for completed tracks (were active, now gone)
+                    mature = self._tracker.mature_objects
+                    current_ids = set(tracks.keys())
+                    self._prev_track_ids = current_ids
+
+                    # Record & log for mature tracks
+                    has_detections = len(mature) > 0
+                    if has_detections:
+                        clip_path = self._clip_writer.trigger_recording()
+                        for oid, obj in mature.items():
+                            self._publish_event(obj, clip_path)
+
+                    annotated = self._draw_overlays(display, tracks)
+                    raw_annotated = self._annotate_fullres(frame, tracks)
+                    self._clip_writer.feed_frame(annotated, raw_annotated)
                 else:
-                    time.sleep(0.001)  # yield CPU when idle
-                continue
+                    # Idle path: HUD only, no preprocessing/tracking/recording
+                    self._active_tracks = 0
+                    annotated = self._draw_overlays(display, {})
 
-            self._frame_count += 1
-            display = self._preprocessor.resize_only(frame)
+                with self._display_lock:
+                    # Discard if URL changed while this frame was being processed
+                    if self._url_version == url_ver:
+                        self._display_frame = annotated
 
-            if in_schedule:
-                # Active path: full pipeline
-                timestamp = time.time()
-                gray = self._preprocessor.process(frame)
-                detections = self._detector.detect(gray, frame_num, timestamp)
-                if self._exclusion_zones:
-                    detections = [d for d in detections
-                                  if not point_in_any_zone(d.x, d.y, self._exclusion_zones)]
-                tracks = self._tracker.update(detections)
-                self._active_tracks = len(tracks)
+                # FPS calculation
+                fps_frame_count += 1
+                elapsed = time.monotonic() - fps_timer
+                if elapsed >= 1.0:
+                    self._fps_actual = fps_frame_count / elapsed
+                    fps_frame_count = 0
+                    fps_timer = time.monotonic()
 
-                # Check for completed tracks (were active, now gone)
-                mature = self._tracker.mature_objects
-                current_ids = set(tracks.keys())
-                self._prev_track_ids = current_ids
-
-                # Record & log for mature tracks
-                has_detections = len(mature) > 0
-                if has_detections:
-                    clip_path = self._clip_writer.trigger_recording()
-                    for oid, obj in mature.items():
-                        self._publish_event(obj, clip_path)
-
-                annotated = self._draw_overlays(display, tracks)
-                raw_annotated = self._annotate_fullres(frame, tracks)
-                self._clip_writer.feed_frame(annotated, raw_annotated)
-            else:
-                # Idle path: HUD only, no preprocessing/tracking/recording
-                self._active_tracks = 0
-                annotated = self._draw_overlays(display, {})
-
-            with self._display_lock:
-                # Discard if URL changed while this frame was being processed
-                if self._url_version == url_ver:
-                    self._display_frame = annotated
-
-            # FPS calculation
-            fps_frame_count += 1
-            elapsed = time.monotonic() - fps_timer
-            if elapsed >= 1.0:
-                self._fps_actual = fps_frame_count / elapsed
-                fps_frame_count = 0
-                fps_timer = time.monotonic()
+            except Exception:
+                logger.exception("Error in process loop, recovering...")
+                time.sleep(0.1)
 
     def _draw_overlays(self, frame: np.ndarray,
                        tracks: dict[int, TrackedObject]) -> np.ndarray:

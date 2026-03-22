@@ -19,7 +19,7 @@ TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 def create_app(pipeline: Pipeline) -> FastAPI:
     """Create and configure the FastAPI application."""
-    app = FastAPI(title="Aerial Object Detection", version="0.3.0")
+    app = FastAPI(title="Aerial Object Detection", version="0.3.1")
 
     # Static files
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
