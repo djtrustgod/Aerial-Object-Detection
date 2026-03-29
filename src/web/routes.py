@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from datetime import datetime
 from pathlib import Path
 
 import cv2
@@ -33,6 +34,20 @@ def _typed_dict(config_obj, body: dict) -> dict:
     return result
 
 
+def _remove_files(base_dir: Path, paths: list[str]) -> int:
+    """Delete files by name from base_dir. Returns count of files removed."""
+    removed = 0
+    for p in paths:
+        try:
+            fp = base_dir / Path(p).name
+            if fp.exists():
+                fp.unlink()
+                removed += 1
+        except Exception:
+            pass
+    return removed
+
+
 def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
     router = APIRouter()
 
@@ -44,11 +59,25 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
         })
 
     @router.get("/history")
-    async def history(request: Request):
-        events = pipeline.event_logger.get_recent(100)
+    async def history(request: Request, session: int | None = None):
+        sessions = pipeline.event_logger.get_sessions()
+        if not sessions:
+            return templates.TemplateResponse("history.html", {
+                "request": request,
+                "events": [],
+                "sessions": [],
+                "current_session": None,
+            })
+
+        # Default to newest session (session_id=1)
+        current = session if session and 1 <= session <= len(sessions) else 1
+        events = pipeline.event_logger.get_events_by_session(current)
+
         return templates.TemplateResponse("history.html", {
             "request": request,
             "events": events,
+            "sessions": sessions,
+            "current_session": current,
         })
 
     @router.get("/settings")
@@ -76,11 +105,28 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
                 "avg_x": e.avg_x,
                 "avg_y": e.avg_y,
                 "avg_speed": e.avg_speed,
-                "trajectory_length": e.trajectory_length,
+                "travel_distance": e.travel_distance,
                 "clip_path": e.clip_path,
+                "thumbnail_path": e.thumbnail_path,
             }
             for e in events
         ])
+
+    @router.get("/api/sessions")
+    async def api_sessions():
+        sessions = pipeline.event_logger.get_sessions()
+        result = []
+        for s in sessions:
+            result.append({
+                "session_id": s["session_id"],
+                "start_time": s["start_time"],
+                "end_time": s["end_time"],
+                "event_count": s["event_count"],
+                "label": datetime.fromtimestamp(s["start_time"]).strftime("%b %d, %Y %I:%M %p")
+                         + " – "
+                         + datetime.fromtimestamp(s["end_time"]).strftime("%b %d, %Y %I:%M %p"),
+            })
+        return JSONResponse(result)
 
     @router.get("/api/event-stats")
     async def api_event_stats():
@@ -102,22 +148,28 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
             event_ids = None
 
         clips_base = Path(pipeline.config.recording.clip_dir)
+        thumbs_base = Path(pipeline.config.recording.thumb_dir)
 
         if event_ids:
-            clip_paths = pipeline.event_logger.delete_by_ids(event_ids)
+            clip_paths, thumb_paths = pipeline.event_logger.delete_by_ids(event_ids)
             count = len(event_ids)
         else:
-            count, clip_paths = pipeline.event_logger.clear_all()
+            count, clip_paths, thumb_paths = pipeline.event_logger.clear_all()
 
-        files_removed = 0
-        for cp in clip_paths:
-            try:
-                p = clips_base / Path(cp).name
-                if p.exists():
-                    p.unlink()
-                    files_removed += 1
-            except Exception:
-                pass
+        files_removed = _remove_files(clips_base, clip_paths)
+        files_removed += _remove_files(thumbs_base, thumb_paths)
+
+        return JSONResponse({"status": "ok", "deleted": count, "files_removed": files_removed})
+
+    @router.delete("/api/sessions/{session_id}")
+    async def api_delete_session(session_id: int):
+        clips_base = Path(pipeline.config.recording.clip_dir)
+        thumbs_base = Path(pipeline.config.recording.thumb_dir)
+
+        count, clip_paths, thumb_paths = pipeline.event_logger.delete_by_session(session_id)
+
+        files_removed = _remove_files(clips_base, clip_paths)
+        files_removed += _remove_files(thumbs_base, thumb_paths)
 
         return JSONResponse({"status": "ok", "deleted": count, "files_removed": files_removed})
 

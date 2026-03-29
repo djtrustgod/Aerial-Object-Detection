@@ -24,6 +24,8 @@ from src.recording.clip_writer import ClipWriter
 from src.recording.event_logger import EventLogger
 from src.recording.models import DetectionEvent, TrackedObject
 
+from pathlib import Path
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,6 +54,10 @@ class Pipeline:
             full_resolution=config.recording.clip_full_resolution,
         )
         self._event_logger = EventLogger(config.recording.db_path)
+
+        # Thumbnail directory
+        self._thumb_dir = Path(config.recording.thumb_dir)
+        self._thumb_dir.mkdir(parents=True, exist_ok=True)
 
         # Display frame (with overlays)
         self._display_frame: np.ndarray | None = None
@@ -423,6 +429,13 @@ class Pipeline:
             speeds.append((dx ** 2 + dy ** 2) ** 0.5)
         avg_speed = float(np.mean(speeds)) if speeds else 0.0
 
+        # Total travel distance (sum of Euclidean steps)
+        travel = sum(
+            ((positions[i + 1][0] - positions[i][0]) ** 2 +
+             (positions[i + 1][1] - positions[i][1]) ** 2) ** 0.5
+            for i in range(len(positions) - 1)
+        )
+
         event = DetectionEvent(
             object_id=obj.object_id,
             start_time=time.time(),
@@ -432,7 +445,7 @@ class Pipeline:
             avg_x=avg_x,
             avg_y=avg_y,
             avg_speed=avg_speed,
-            trajectory_length=len(positions),
+            travel_distance=travel,
             clip_path=clip_path,
         )
 
@@ -441,6 +454,31 @@ class Pipeline:
             self._logged_ids: set[int] = set()
         if obj.object_id not in self._logged_ids:
             self._logged_ids.add(obj.object_id)
+
+            # Capture thumbnail with detection bounding box
+            try:
+                thumb_frame = None
+                with self._display_lock:
+                    if self._display_frame is not None:
+                        thumb_frame = self._display_frame.copy()
+                if thumb_frame is not None:
+                    cx, cy = obj.centroid
+                    box_half = 15
+                    cv2.rectangle(
+                        thumb_frame,
+                        (cx - box_half, cy - box_half),
+                        (cx + box_half, cy + box_half),
+                        (0, 255, 0), 2,
+                    )
+                    ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    thumb_name = f"thumb_{ts_str}_{obj.object_id}.jpg"
+                    thumb_path = self._thumb_dir / thumb_name
+                    cv2.imwrite(str(thumb_path), thumb_frame,
+                                [cv2.IMWRITE_JPEG_QUALITY, self._config.recording.jpeg_quality])
+                    event.thumbnail_path = thumb_name
+            except Exception:
+                logger.exception("Failed to save thumbnail for object %d", obj.object_id)
+
             event.event_id = self._event_logger.log_event(event)
 
         # Publish to WebSocket subscribers
@@ -451,7 +489,7 @@ class Pipeline:
             "x": avg_x,
             "y": avg_y,
             "speed": avg_speed,
-            "trajectory_length": len(positions),
+            "travel_distance": travel,
         }
 
         for callback in self._event_callbacks:

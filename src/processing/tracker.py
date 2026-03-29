@@ -18,6 +18,7 @@ class CentroidTracker:
         self._max_distance = config.max_distance
         self._max_disappeared = config.max_disappeared
         self._min_track_length = config.min_track_length
+        self._min_total_travel = config.min_total_travel
 
         self._next_id = 0
         self._objects: OrderedDict[int, TrackedObject] = OrderedDict()
@@ -29,11 +30,20 @@ class CentroidTracker:
 
     @property
     def mature_objects(self) -> dict[int, TrackedObject]:
-        """Return tracked objects that meet the minimum track length."""
-        return {
-            oid: obj for oid, obj in self._objects.items()
-            if len(obj.positions) >= self._min_track_length
-        }
+        """Return tracked objects that meet the minimum track length and travel distance."""
+        result = {}
+        for oid, obj in self._objects.items():
+            if len(obj.positions) < self._min_track_length:
+                continue
+            travel = sum(
+                ((obj.positions[i + 1][0] - obj.positions[i][0]) ** 2 +
+                 (obj.positions[i + 1][1] - obj.positions[i][1]) ** 2) ** 0.5
+                for i in range(len(obj.positions) - 1)
+            )
+            if travel < self._min_total_travel:
+                continue
+            result[oid] = obj
+        return result
 
     def update(self, detections: list[Detection]) -> dict[int, TrackedObject]:
         """Update tracks with new detections.

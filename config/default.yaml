@@ -26,16 +26,19 @@ detection:
   min_contour_area: 15       # Smallest object size to consider (pixels²) — filters out single-pixel noise
   max_contour_area: 500      # Largest object size to consider (pixels²) — filters out clouds and large artifacts
   min_circularity: 0.4       # How round an object must be (0–1) — filters out edge streaks and irregular shapes
+  min_brightness: 100        # Minimum mean brightness of a blob (0–255) — filters out dim noise like clouds and reflections
 
 tracking:
   max_distance: 50           # How far (pixels) an object can move between frames and still be the same track
   max_disappeared: 10        # How many frames an object can go missing before its track is dropped
   min_track_length: 8        # Minimum frames an object must be tracked before it is reported as a detection
+  min_total_travel: 30.0     # Minimum total distance (pixels) an object must travel to be considered a real detection
 
 recording:
   clip_pre_buffer: 3.0       # Seconds of footage saved before a detection event begins
   clip_post_buffer: 5.0      # Seconds of footage saved after a detection event ends
   clip_dir: "data/clips"     # Folder where recorded video clips are saved
+  thumb_dir: "data/thumbs"   # Folder where detection thumbnail images are saved
   db_path: "data/db/detections.db"  # Path to the database file used for logging detection events
   log_dir: "data/logs"       # Folder where application log files are written
   jpeg_quality: 70           # Image quality for saved frames (1–100, higher = better quality, larger files)
@@ -49,5 +52,5 @@ web:
 
 schedule:
   enabled: true             # When true, detection only runs within the time window below
-  start_time: "20:00"        # Detection begins at this time each day (HH:MM, 24-hour)
+  start_time: "21:00"        # Detection begins at this time each day (HH:MM, 24-hour)
   end_time: "05:00"          # Detection ends at this time (set earlier than start for overnight window)

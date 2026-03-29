@@ -43,5 +43,6 @@ class DetectionEvent:
     avg_x: float = 0.0
     avg_y: float = 0.0
     avg_speed: float = 0.0
-    trajectory_length: int = 0
+    travel_distance: float = 0.0
     clip_path: Optional[str] = None
+    thumbnail_path: Optional[str] = None

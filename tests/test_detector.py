@@ -81,3 +81,30 @@ class TestDetector:
 
         if detections:
             assert detections[0].brightness > 100
+
+    def test_filters_dim_blobs(self, detection_config):
+        """Blobs below min_brightness should be filtered out."""
+        detection_config.min_brightness = 150
+        detector = Detector(detection_config)
+        blank = make_frame()
+
+        for i in range(5):
+            detector.detect(blank, frame_number=i)
+
+        # Dim blob (brightness=50) should be filtered
+        frame = add_dot(blank, 320, 180, radius=5, brightness=50)
+        detections = detector.detect(frame, frame_number=6)
+        assert len(detections) == 0
+
+    def test_passes_bright_blobs(self, detection_config):
+        """Blobs above min_brightness should pass the filter."""
+        detection_config.min_brightness = 100
+        detector = Detector(detection_config)
+        blank = make_frame()
+
+        for i in range(5):
+            detector.detect(blank, frame_number=i)
+
+        frame = add_dot(blank, 320, 180, radius=5, brightness=255)
+        detections = detector.detect(frame, frame_number=6)
+        assert len(detections) >= 1

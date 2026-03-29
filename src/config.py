@@ -39,6 +39,7 @@ class DetectionConfig:
     min_contour_area: int = 4
     max_contour_area: int = 500
     min_circularity: float = 0.3
+    min_brightness: int = 100
 
 
 @dataclass
@@ -46,6 +47,7 @@ class TrackingConfig:
     max_distance: int = 50
     max_disappeared: int = 15
     min_track_length: int = 5
+    min_total_travel: float = 30.0
 
 
 @dataclass
@@ -53,6 +55,7 @@ class RecordingConfig:
     clip_pre_buffer: float = 3.0
     clip_post_buffer: float = 5.0
     clip_dir: str = "data/clips"
+    thumb_dir: str = "data/thumbs"
     db_path: str = "data/db/detections.db"
     log_dir: str = "data/logs"
     jpeg_quality: int = 70
