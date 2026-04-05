@@ -37,14 +37,24 @@ def _typed_dict(config_obj, body: dict) -> dict:
 
 
 def _remove_files(base_dir: Path, paths: list[str]) -> int:
-    """Delete files by name from base_dir. Returns count of files removed."""
+    """Delete files by name from base_dir, including _clean companion clips.
+
+    Returns count of files removed.
+    """
     removed = 0
     for p in paths:
         try:
-            fp = base_dir / Path(p).name
+            name = Path(p).name
+            fp = base_dir / name
             if fp.exists():
                 fp.unlink()
                 removed += 1
+            # Also remove the companion clean clip (e.g. clip_xxx_clean.mp4)
+            if name.endswith(".mp4"):
+                clean_fp = base_dir / name.replace(".mp4", "_clean.mp4")
+                if clean_fp.exists():
+                    clean_fp.unlink()
+                    removed += 1
         except Exception:
             pass
     return removed
