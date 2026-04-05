@@ -7,11 +7,13 @@ from datetime import datetime
 from pathlib import Path
 
 import cv2
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Form, Request, UploadFile, File
 from fastapi.responses import JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from src.pipeline import Pipeline
+from src.web.test_pipeline import TestPipeline, get_active_test, set_active_test
+from src.web import video_metadata as vmeta
 
 
 def _cast(current_value, new_value):
@@ -303,5 +305,194 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
             "request": request,
             "zones": pipeline.get_zones(),
         })
+
+    # --- Test Video Upload & Analysis ---
+
+    UPLOADS_DIR = Path("data/uploads")
+    MAX_UPLOAD_SIZE = 500 * 1024 * 1024  # 500 MB
+
+    @router.post("/api/test-video/upload")
+    async def api_test_video_upload(
+        file: UploadFile = File(...),
+        category: str = Form("positive"),
+    ):
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        ext = Path(file.filename or "video.mp4").suffix.lower()
+        if ext not in (".mp4", ".avi", ".mov", ".mkv"):
+            return JSONResponse({"error": "Unsupported format. Use MP4, AVI, MOV, or MKV."},
+                                status_code=400)
+
+        contents = await file.read()
+        if len(contents) > MAX_UPLOAD_SIZE:
+            return JSONResponse({"error": "File too large. Maximum 500 MB."},
+                                status_code=413)
+
+        safe_name = Path(file.filename).name
+        dest = UPLOADS_DIR / safe_name
+        dest.write_bytes(contents)
+
+        vmeta.register_file(safe_name, category)
+
+        size_mb = round(len(contents) / (1024 * 1024), 1)
+        return JSONResponse({"status": "ok", "filename": safe_name,
+                             "size_mb": size_mb, "category": category})
+
+    @router.get("/api/test-video/files")
+    async def api_test_video_files():
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        meta = vmeta.get_all_files_meta()
+        files = []
+        for f in sorted(UPLOADS_DIR.iterdir()):
+            if f.is_file() and f.suffix.lower() in (".mp4", ".avi", ".mov", ".mkv"):
+                stat = f.stat()
+                file_meta = meta.get(f.name, {})
+                files.append({
+                    "filename": f.name,
+                    "size_mb": round(stat.st_size / (1024 * 1024), 1),
+                    "uploaded_at": file_meta.get("uploaded_at", stat.st_mtime),
+                    "category": file_meta.get("category", "positive"),
+                })
+        return JSONResponse(files)
+
+    @router.delete("/api/test-video/files/{filename}")
+    async def api_test_video_delete(filename: str):
+        safe_name = Path(filename).name
+        fp = UPLOADS_DIR / safe_name
+        if not fp.exists():
+            return JSONResponse({"error": "File not found"}, status_code=404)
+        fp.unlink()
+        vmeta.remove_file(safe_name)
+        return JSONResponse({"status": "ok"})
+
+    @router.patch("/api/test-video/files/{filename}/category")
+    async def api_test_video_set_category(filename: str, request: Request):
+        body = await request.json()
+        category = body.get("category")
+        if category not in ("positive", "false_positive"):
+            return JSONResponse({"error": "Invalid category"}, status_code=400)
+        safe_name = Path(filename).name
+        fp = UPLOADS_DIR / safe_name
+        if not fp.exists():
+            return JSONResponse({"error": "File not found"}, status_code=404)
+        vmeta.set_file_category(safe_name, category)
+        return JSONResponse({"status": "ok", "category": category})
+
+    @router.post("/api/test-video/bulk-delete")
+    async def api_test_video_bulk_delete(request: Request):
+        body = await request.json()
+        filenames = body.get("filenames", [])
+        deleted = 0
+        for name in filenames:
+            safe_name = Path(name).name
+            fp = UPLOADS_DIR / safe_name
+            if fp.exists():
+                fp.unlink()
+                vmeta.remove_file(safe_name)
+                deleted += 1
+        return JSONResponse({"status": "ok", "deleted": deleted})
+
+    @router.post("/api/test-video/bulk-category")
+    async def api_test_video_bulk_category(request: Request):
+        body = await request.json()
+        filenames = body.get("filenames", [])
+        category = body.get("category")
+        if category not in ("positive", "false_positive"):
+            return JSONResponse({"error": "Invalid category"}, status_code=400)
+        updated = 0
+        for name in filenames:
+            safe_name = Path(name).name
+            if (UPLOADS_DIR / safe_name).exists():
+                vmeta.set_file_category(safe_name, category)
+                updated += 1
+        return JSONResponse({"status": "ok", "updated": updated})
+
+    @router.post("/api/test-video/start")
+    async def api_test_video_start(request: Request):
+        body = await request.json()
+        filename = body.get("filename")
+        if not filename:
+            return JSONResponse({"error": "filename required"}, status_code=400)
+
+        safe_name = Path(filename).name
+        fp = UPLOADS_DIR / safe_name
+        if not fp.exists():
+            return JSONResponse({"error": "File not found"}, status_code=404)
+
+        active = get_active_test()
+        if active and active.is_running:
+            return JSONResponse({"error": "A test is already running. Stop it first."},
+                                status_code=409)
+
+        test = TestPipeline(str(fp), pipeline.config)
+        set_active_test(test)
+        test.start()
+        return JSONResponse({"status": "ok", "filename": safe_name})
+
+    @router.post("/api/test-video/stop")
+    async def api_test_video_stop():
+        active = get_active_test()
+        if active and active.is_running:
+            active.stop()
+        set_active_test(None)
+        return JSONResponse({"status": "ok"})
+
+    @router.get("/api/test-video/status")
+    async def api_test_video_status():
+        active = get_active_test()
+        if active is None:
+            return JSONResponse({
+                "running": False, "complete": False,
+                "progress": 0, "current_frame": 0,
+                "total_frames": 0, "fps": 0,
+            })
+        return JSONResponse({
+            "running": active.is_running,
+            "complete": active.is_complete,
+            "progress": round(active.progress, 4),
+            "current_frame": active.current_frame,
+            "total_frames": active.total_frames,
+            "fps": round(active.video_fps, 1),
+        })
+
+    @router.post("/api/test-video/analyze")
+    async def api_test_video_analyze(request: Request):
+        body = await request.json()
+        filename = body.get("filename")
+        if not filename:
+            return JSONResponse({"error": "filename required"}, status_code=400)
+
+        safe_name = Path(filename).name
+        fp = UPLOADS_DIR / safe_name
+        if not fp.exists():
+            return JSONResponse({"error": "File not found"}, status_code=404)
+
+        test = TestPipeline(str(fp), pipeline.config)
+        result = test.run_analysis()
+
+        if "error" in result:
+            return JSONResponse(result, status_code=400)
+
+        # Save to analysis history
+        file_meta = vmeta.get_file_meta(safe_name)
+        category = file_meta["category"] if file_meta else "positive"
+        record = vmeta.add_analysis_record(
+            safe_name, category,
+            {k: v for k, v in result.items() if k != "settings_used"},
+            result.get("settings_used", {}),
+        )
+        result["history_id"] = record["id"]
+
+        return JSONResponse(result)
+
+    @router.get("/api/test-video/history")
+    async def api_test_video_history(filename: str | None = None):
+        history = vmeta.get_analysis_history(filename)
+        return JSONResponse(history)
+
+    @router.delete("/api/test-video/history/{record_id}")
+    async def api_test_video_delete_history(record_id: str):
+        if vmeta.delete_analysis_record(record_id):
+            return JSONResponse({"status": "ok"})
+        return JSONResponse({"error": "Not found"}, status_code=404)
 
     return router

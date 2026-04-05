@@ -19,7 +19,7 @@ TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 def create_app(pipeline: Pipeline) -> FastAPI:
     """Create and configure the FastAPI application."""
-    app = FastAPI(title="Aerial Object Detection", version="0.4.0")
+    app = FastAPI(title="Aerial Object Detection", version="0.4.5")
 
     # Static files
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -42,5 +42,8 @@ def create_app(pipeline: Pipeline) -> FastAPI:
     thumbs_dir = Path(pipeline.config.recording.thumb_dir)
     thumbs_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/thumbs", StaticFiles(directory=str(thumbs_dir)), name="thumbs")
+
+    # Ensure uploads directory exists for test videos
+    Path("data/uploads").mkdir(parents=True, exist_ok=True)
 
     return app

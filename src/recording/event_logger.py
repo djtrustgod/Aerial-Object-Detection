@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS events (
     avg_x REAL NOT NULL,
     avg_y REAL NOT NULL,
     avg_speed REAL NOT NULL,
+    trajectory_length INTEGER NOT NULL DEFAULT 0,
     travel_distance REAL NOT NULL DEFAULT 0.0,
     clip_path TEXT,
     thumbnail_path TEXT
@@ -31,14 +32,14 @@ INSERT_SQL = """
 INSERT INTO events (
     object_id, start_time, end_time,
     start_frame, end_frame, avg_x, avg_y, avg_speed,
-    travel_distance, clip_path, thumbnail_path
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    trajectory_length, travel_distance, clip_path, thumbnail_path
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 """
 
 SELECT_ALL_SQL = """
 SELECT event_id, object_id, start_time,
        end_time, start_frame, end_frame, avg_x, avg_y, avg_speed,
-       travel_distance, clip_path, thumbnail_path
+       trajectory_length, travel_distance, clip_path, thumbnail_path
 FROM events ORDER BY start_time DESC
 """
 
@@ -69,6 +70,46 @@ class EventLogger:
             self._conn.execute("ALTER TABLE events ADD COLUMN travel_distance REAL DEFAULT 0.0")
         if "thumbnail_path" not in cols:
             self._conn.execute("ALTER TABLE events ADD COLUMN thumbnail_path TEXT")
+
+        # Fix trajectory_length NOT NULL without default (from legacy schema).
+        # Check if trajectory_length exists but has no default and NOT NULL.
+        col_info = {r[1]: r for r in self._conn.execute("PRAGMA table_info(events)").fetchall()}
+        if "trajectory_length" in col_info:
+            # cid, name, type, notnull, dflt_value, pk
+            notnull = col_info["trajectory_length"][3]
+            dflt = col_info["trajectory_length"][4]
+            if notnull and dflt is None:
+                # Recreate table with default to fix the constraint
+                logger.info("Migrating trajectory_length column to add DEFAULT 0")
+                self._conn.executescript("""
+                    CREATE TABLE events_new (
+                        event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        object_id INTEGER NOT NULL,
+                        start_time REAL NOT NULL,
+                        end_time REAL NOT NULL,
+                        start_frame INTEGER NOT NULL,
+                        end_frame INTEGER NOT NULL,
+                        avg_x REAL NOT NULL,
+                        avg_y REAL NOT NULL,
+                        avg_speed REAL NOT NULL,
+                        trajectory_length INTEGER NOT NULL DEFAULT 0,
+                        travel_distance REAL NOT NULL DEFAULT 0.0,
+                        clip_path TEXT,
+                        thumbnail_path TEXT
+                    );
+                    INSERT INTO events_new SELECT
+                        event_id, object_id, start_time, end_time,
+                        start_frame, end_frame, avg_x, avg_y, avg_speed,
+                        trajectory_length, travel_distance, clip_path, thumbnail_path
+                    FROM events;
+                    DROP TABLE events;
+                    ALTER TABLE events_new RENAME TO events;
+                """)
+        elif "trajectory_length" not in col_info:
+            self._conn.execute(
+                "ALTER TABLE events ADD COLUMN trajectory_length INTEGER NOT NULL DEFAULT 0"
+            )
+
         self._conn.commit()
 
     def log_event(self, event: DetectionEvent) -> int:
@@ -82,6 +123,7 @@ class EventLogger:
             event.avg_x,
             event.avg_y,
             event.avg_speed,
+            event.trajectory_length,
             event.travel_distance,
             event.clip_path,
             event.thumbnail_path,
@@ -247,7 +289,8 @@ class EventLogger:
             avg_x=row[6],
             avg_y=row[7],
             avg_speed=row[8],
-            travel_distance=row[9],
-            clip_path=row[10],
-            thumbnail_path=row[11],
+            trajectory_length=row[9],
+            travel_distance=row[10],
+            clip_path=row[11],
+            thumbnail_path=row[12],
         )

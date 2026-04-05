@@ -26,6 +26,245 @@
     padding-bottom: 4px;
     border-bottom: 1px solid #2a3a4a;
 }
+
+/* Video Upload & Test card */
+.test-video-card {
+    grid-column: 1 / -1;
+}
+.test-video-layout {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 20px;
+}
+.test-file-list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.test-file-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    border: 1px solid transparent;
+}
+.test-file-list li:hover {
+    background: rgba(255,255,255,0.05);
+}
+.test-file-list li.selected {
+    background: rgba(34,197,94,0.12);
+    border-color: #22c55e;
+}
+.test-file-list li .file-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.test-file-list li .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.test-file-list li .file-size {
+    color: #8a9bb5;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+.test-file-list li .btn-delete-file {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+.test-file-list li .btn-delete-file:hover {
+    background: rgba(239,68,68,0.15);
+}
+.test-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+.test-controls .btn {
+    font-size: 0.82rem;
+    padding: 6px 14px;
+}
+.btn-analyze {
+    background: var(--cyan, #06b6d4) !important;
+}
+.btn-analyze:hover {
+    filter: brightness(1.15);
+}
+.test-preview-area {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+#test-stream-canvas {
+    width: 100%;
+    background: #0a0e17;
+    border-radius: 6px;
+    border: 1px solid #2a3a4e;
+}
+.test-progress-bar {
+    height: 6px;
+    background: #1a2332;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.test-progress-bar .fill {
+    height: 100%;
+    background: #22c55e;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+.test-status-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: #8a9bb5;
+}
+.test-analysis-results {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(6,182,212,0.08);
+    border: 1px solid rgba(6,182,212,0.2);
+    border-radius: 6px;
+    font-size: 0.82rem;
+    display: none;
+}
+.test-analysis-results.visible {
+    display: block;
+}
+.test-analysis-results .metric {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+}
+.test-analysis-results .metric-label {
+    color: #8a9bb5;
+}
+.test-analysis-results .metric-value {
+    color: #e2e8f0;
+    font-weight: 600;
+}
+.test-upload-btn-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.test-upload-btn-row input[type="file"] {
+    display: none;
+}
+.upload-status {
+    font-size: 0.78rem;
+    color: #22c55e;
+    margin-left: 4px;
+}
+.category-select {
+    background: #1a2332;
+    color: #e2e8f0;
+    border: 1px solid #2a3a4e;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.category-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+.badge-pos { background: rgba(34,197,94,0.2); color: #22c55e; }
+.badge-fp  { background: rgba(239,68,68,0.2); color: #ef4444; }
+.test-file-list li .inline-category {
+    background: #1a2332;
+    color: #e2e8f0;
+    border: 1px solid #2a3a4e;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.test-filter-bar {
+    display: flex;
+    gap: 4px;
+    margin: 8px 0 4px;
+}
+.test-filter-bar button {
+    background: none;
+    border: 1px solid #2a3a4e;
+    color: #8a9bb5;
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 0.72rem;
+    cursor: pointer;
+}
+.test-filter-bar button.active {
+    background: rgba(59,130,246,0.2);
+    color: #3b82f6;
+    border-color: #3b82f6;
+}
+.bulk-toolbar {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    margin: 6px 0;
+    background: rgba(59,130,246,0.08);
+    border: 1px solid rgba(59,130,246,0.2);
+    border-radius: 4px;
+    font-size: 0.78rem;
+    color: #8a9bb5;
+}
+.bulk-toolbar.visible { display: flex; }
+.bulk-toolbar .btn { font-size: 0.75rem; padding: 3px 10px; }
+.test-analysis-history { margin-top: 10px; }
+.history-entries {
+    max-height: 250px;
+    overflow-y: auto;
+}
+.history-entry {
+    padding: 8px 10px;
+    margin: 4px 0;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid #2a3a4e;
+    border-radius: 4px;
+    font-size: 0.78rem;
+}
+.history-entry .history-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    color: #8a9bb5;
+}
+.history-entry .history-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 12px;
+    color: #e2e8f0;
+}
+@media (max-width: 1024px) {
+    .test-video-layout {
+        grid-template-columns: 1fr;
+    }
+}
 </style>
 {% endblock %}
 
@@ -331,6 +570,83 @@
         </div>
     </div>
 
+    <!-- Video Upload & Test -->
+    <div class="card test-video-card">
+        <div class="card-header"><h2>Video Upload &amp; Test</h2></div>
+        <div class="card-body">
+            <small class="field-hint" style="margin-bottom:12px;">
+                Upload known-good sample recordings to test and refine your detection settings.
+                Bounding boxes appear only on objects that meet History-save criteria (min track length + min travel).
+            </small>
+            <div class="test-video-layout">
+                <!-- Left: File library & controls -->
+                <div class="test-library-panel">
+                    <div class="section-label">Test Library</div>
+                    <div class="test-upload-btn-row">
+                        <input type="file" id="test-file-input" accept=".mp4,.avi,.mov,.mkv">
+                        <button type="button" class="btn" onclick="document.getElementById('test-file-input').click()">Choose File</button>
+                        <select id="upload-category" class="category-select">
+                            <option value="positive">Positive Detection</option>
+                            <option value="false_positive">False Positive</option>
+                        </select>
+                        <span id="upload-status" class="upload-status"></span>
+                    </div>
+                    <div class="test-filter-bar">
+                        <button data-filter="all" class="active">All</button>
+                        <button data-filter="positive">Positive</button>
+                        <button data-filter="false_positive">False Positive</button>
+                    </div>
+                    <div id="bulk-toolbar" class="bulk-toolbar">
+                        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                            <input type="checkbox" id="select-all-cb"> Select All
+                        </label>
+                        <span id="bulk-count">0 selected</span>
+                        <select id="bulk-category-select" class="category-select" style="margin-left:auto;">
+                            <option value="">Set Category...</option>
+                            <option value="positive">Positive</option>
+                            <option value="false_positive">False Positive</option>
+                        </select>
+                        <button type="button" id="btn-bulk-delete" class="btn btn-danger">Delete Selected</button>
+                    </div>
+                    <ul id="test-file-list" class="test-file-list">
+                        <li style="color:#5a7090;">No files uploaded</li>
+                    </ul>
+                    <div class="test-controls">
+                        <button type="button" id="btn-start-test" class="btn" disabled>Start Test</button>
+                        <button type="button" id="btn-stop-test" class="btn btn-danger" disabled>Stop</button>
+                        <button type="button" id="btn-analyze" class="btn btn-analyze" disabled>Run Analysis</button>
+                    </div>
+                    <span id="test-action-status" style="font-size:0.78rem;color:#8a9bb5;margin-top:6px;display:block;"></span>
+                </div>
+
+                <!-- Right: Preview & results -->
+                <div class="test-preview-area">
+                    <canvas id="test-stream-canvas" width="640" height="360"></canvas>
+                    <div class="test-progress-bar"><div class="fill" id="test-progress-fill"></div></div>
+                    <div class="test-status-line">
+                        <span id="test-status-text">Ready</span>
+                        <span id="test-frame-counter"></span>
+                    </div>
+                    <div id="test-analysis-results" class="test-analysis-results">
+                        <div class="section-label" style="margin-top:0;">Analysis Results</div>
+                        <div class="metric"><span class="metric-label">Total Frames</span><span class="metric-value" id="ar-total-frames">--</span></div>
+                        <div class="metric"><span class="metric-label">Frames with Detections</span><span class="metric-value" id="ar-det-frames">--</span></div>
+                        <div class="metric"><span class="metric-label">Detection Rate</span><span class="metric-value" id="ar-det-rate">--</span></div>
+                        <div class="metric"><span class="metric-label">Mature Tracks Formed</span><span class="metric-value" id="ar-mature-tracks">--</span></div>
+                        <div class="metric"><span class="metric-label">Avg Track Length</span><span class="metric-value" id="ar-avg-length">--</span></div>
+                        <div class="metric"><span class="metric-label">Avg Track Travel</span><span class="metric-value" id="ar-avg-travel">--</span></div>
+                    </div>
+                    <div class="test-analysis-history">
+                        <div class="section-label" style="margin-top:12px;">Analysis History</div>
+                        <div id="history-entries" class="history-entries">
+                            <div style="color:#5a7090;font-size:0.78rem;padding:6px;">No analysis history</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
@@ -386,5 +702,415 @@ async function updateStats() {
 }
 setInterval(updateStats, 2000);
 updateStats();
+
+// ── Video Upload & Test ──
+
+(function() {
+    let selectedFile = null;
+    let allFiles = [];
+    let activeFilter = 'all';
+    let testWs = null;
+    let statusPoll = null;
+
+    const fileInput = document.getElementById('test-file-input');
+    const fileList = document.getElementById('test-file-list');
+    const btnStart = document.getElementById('btn-start-test');
+    const btnStop = document.getElementById('btn-stop-test');
+    const btnAnalyze = document.getElementById('btn-analyze');
+    const uploadStatus = document.getElementById('upload-status');
+    const actionStatus = document.getElementById('test-action-status');
+    const canvas = document.getElementById('test-stream-canvas');
+    const ctx = canvas.getContext('2d');
+    const progressFill = document.getElementById('test-progress-fill');
+    const statusText = document.getElementById('test-status-text');
+    const frameCounter = document.getElementById('test-frame-counter');
+    const analysisResults = document.getElementById('test-analysis-results');
+    const bulkToolbar = document.getElementById('bulk-toolbar');
+    const selectAllCb = document.getElementById('select-all-cb');
+    const bulkCount = document.getElementById('bulk-count');
+    const bulkCatSelect = document.getElementById('bulk-category-select');
+    const btnBulkDelete = document.getElementById('btn-bulk-delete');
+
+    loadFiles();
+    loadHistory();
+
+    // ── Helpers ──
+
+    function updateButtons() {
+        btnStart.disabled = !selectedFile;
+        btnAnalyze.disabled = !selectedFile;
+    }
+
+    function getSelectedCheckboxes() {
+        return [...fileList.querySelectorAll('input[type=checkbox]:checked')]
+            .map(cb => cb.dataset.filename);
+    }
+
+    function updateBulkToolbar() {
+        const checked = getSelectedCheckboxes();
+        if (checked.length > 0) {
+            bulkToolbar.classList.add('visible');
+            bulkCount.textContent = checked.length + ' selected';
+        } else {
+            bulkToolbar.classList.remove('visible');
+        }
+    }
+
+    function getFilteredFiles() {
+        if (activeFilter === 'all') return allFiles;
+        return allFiles.filter(f => f.category === activeFilter);
+    }
+
+    // ── Filter bar ──
+
+    document.querySelectorAll('.test-filter-bar button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.test-filter-bar button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeFilter = btn.dataset.filter;
+            renderFileList();
+        });
+    });
+
+    // ── File list ──
+
+    async function loadFiles() {
+        try {
+            const resp = await fetch('/api/test-video/files');
+            allFiles = await resp.json();
+            renderFileList();
+        } catch (e) {
+            console.error('Failed to load test files:', e);
+        }
+    }
+
+    function renderFileList() {
+        const files = getFilteredFiles();
+        fileList.innerHTML = '';
+        if (files.length === 0) {
+            fileList.innerHTML = '<li style="color:#5a7090;">No files' +
+                (activeFilter !== 'all' ? ' matching filter' : ' uploaded') + '</li>';
+            if (!allFiles.find(f => f.filename === selectedFile)) {
+                selectedFile = null;
+            }
+            updateButtons();
+            updateBulkToolbar();
+            return;
+        }
+        files.forEach(f => {
+            const li = document.createElement('li');
+            li.dataset.filename = f.filename;
+            li.dataset.category = f.category;
+            const badgeClass = f.category === 'false_positive' ? 'badge-fp' : 'badge-pos';
+            const badgeText = f.category === 'false_positive' ? 'FP' : 'POS';
+            li.innerHTML = `
+                <input type="checkbox" data-filename="${f.filename}" style="flex-shrink:0;cursor:pointer;">
+                <div class="file-info" style="cursor:pointer;">
+                    <span class="file-name">${f.filename}</span>
+                    <span class="category-badge ${badgeClass}">${badgeText}</span>
+                    <span class="file-size">${f.size_mb} MB</span>
+                </div>
+                <select class="inline-category" data-filename="${f.filename}">
+                    <option value="positive" ${f.category === 'positive' ? 'selected' : ''}>POS</option>
+                    <option value="false_positive" ${f.category === 'false_positive' ? 'selected' : ''}>FP</option>
+                </select>
+                <button class="btn-delete-file" title="Delete">&times;</button>
+            `;
+            li.querySelector('.file-info').addEventListener('click', () => {
+                selectFile(f.filename);
+                loadHistory();
+            });
+            li.querySelector('.btn-delete-file').addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteFile(f.filename);
+            });
+            li.querySelector('.inline-category').addEventListener('change', async (e) => {
+                e.stopPropagation();
+                await changeCategory(f.filename, e.target.value);
+            });
+            li.querySelector('input[type=checkbox]').addEventListener('change', () => updateBulkToolbar());
+            if (selectedFile === f.filename) li.classList.add('selected');
+            fileList.appendChild(li);
+        });
+        updateButtons();
+        updateBulkToolbar();
+    }
+
+    function selectFile(filename) {
+        selectedFile = filename;
+        fileList.querySelectorAll('li').forEach(li => {
+            li.classList.toggle('selected', li.dataset.filename === filename);
+        });
+        updateButtons();
+    }
+
+    async function deleteFile(filename) {
+        try {
+            await fetch(`/api/test-video/files/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+            if (selectedFile === filename) selectedFile = null;
+            loadFiles();
+        } catch (e) {
+            console.error('Delete failed:', e);
+        }
+    }
+
+    async function changeCategory(filename, category) {
+        try {
+            await fetch(`/api/test-video/files/${encodeURIComponent(filename)}/category`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ category }),
+            });
+            loadFiles();
+        } catch (e) {
+            console.error('Category change failed:', e);
+        }
+    }
+
+    // ── Bulk operations ──
+
+    selectAllCb.addEventListener('change', () => {
+        const checked = selectAllCb.checked;
+        fileList.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = checked);
+        updateBulkToolbar();
+    });
+
+    btnBulkDelete.addEventListener('click', async () => {
+        const filenames = getSelectedCheckboxes();
+        if (filenames.length === 0) return;
+        try {
+            await fetch('/api/test-video/bulk-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filenames }),
+            });
+            if (filenames.includes(selectedFile)) selectedFile = null;
+            selectAllCb.checked = false;
+            loadFiles();
+        } catch (e) {
+            console.error('Bulk delete failed:', e);
+        }
+    });
+
+    bulkCatSelect.addEventListener('change', async () => {
+        const category = bulkCatSelect.value;
+        if (!category) return;
+        const filenames = getSelectedCheckboxes();
+        if (filenames.length === 0) return;
+        try {
+            await fetch('/api/test-video/bulk-category', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filenames, category }),
+            });
+            bulkCatSelect.value = '';
+            loadFiles();
+        } catch (e) {
+            console.error('Bulk category change failed:', e);
+        }
+    });
+
+    // ── File upload ──
+
+    fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        uploadStatus.textContent = 'Uploading...';
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('category', document.getElementById('upload-category').value);
+        try {
+            const resp = await fetch('/api/test-video/upload', { method: 'POST', body: formData });
+            const result = await resp.json();
+            if (result.status === 'ok') {
+                uploadStatus.textContent = 'Uploaded!';
+                selectedFile = result.filename;
+                loadFiles();
+            } else {
+                uploadStatus.textContent = result.error || 'Upload failed';
+            }
+        } catch (e) {
+            uploadStatus.textContent = 'Upload error';
+        }
+        setTimeout(() => uploadStatus.textContent = '', 3000);
+        fileInput.value = '';
+    });
+
+    // ── Start / Stop test ──
+
+    btnStart.addEventListener('click', async () => {
+        if (!selectedFile) return;
+        try {
+            const resp = await fetch('/api/test-video/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: selectedFile }),
+            });
+            const result = await resp.json();
+            if (result.status === 'ok') {
+                statusText.textContent = 'Running...';
+                btnStop.disabled = false;
+                btnStart.disabled = true;
+                btnAnalyze.disabled = true;
+                connectTestStream();
+                startStatusPoll();
+            } else {
+                actionStatus.textContent = result.error || 'Failed to start';
+                setTimeout(() => actionStatus.textContent = '', 3000);
+            }
+        } catch (e) {
+            actionStatus.textContent = 'Error starting test';
+            setTimeout(() => actionStatus.textContent = '', 3000);
+        }
+    });
+
+    btnStop.addEventListener('click', async () => {
+        try { await fetch('/api/test-video/stop', { method: 'POST' }); } catch (e) {}
+        stopTest();
+    });
+
+    function stopTest() {
+        btnStop.disabled = true;
+        updateButtons();
+        stopStatusPoll();
+        disconnectTestStream();
+        statusText.textContent = 'Stopped';
+    }
+
+    // ── WebSocket test stream ──
+
+    function connectTestStream() {
+        disconnectTestStream();
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        testWs = new WebSocket(`${proto}//${location.host}/ws/test-stream`);
+        testWs.binaryType = 'arraybuffer';
+        testWs.onmessage = (event) => {
+            if (typeof event.data === 'string') {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'complete') {
+                        statusText.textContent = 'Complete';
+                        btnStop.disabled = true;
+                        updateButtons();
+                        stopStatusPoll();
+                        return;
+                    }
+                } catch (e) {}
+                return;
+            }
+            const blob = new Blob([event.data], { type: 'image/jpeg' });
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                URL.revokeObjectURL(url);
+            };
+            img.src = url;
+        };
+        testWs.onclose = () => { testWs = null; };
+        testWs.onerror = () => { testWs = null; };
+    }
+
+    function disconnectTestStream() {
+        if (testWs) { testWs.close(); testWs = null; }
+    }
+
+    // ── Status polling ──
+
+    function startStatusPoll() {
+        stopStatusPoll();
+        statusPoll = setInterval(async () => {
+            try {
+                const resp = await fetch('/api/test-video/status');
+                const s = await resp.json();
+                progressFill.style.width = Math.round(s.progress * 100) + '%';
+                frameCounter.textContent = `${s.current_frame} / ${s.total_frames}`;
+                if (s.complete) {
+                    statusText.textContent = 'Complete';
+                    btnStop.disabled = true;
+                    updateButtons();
+                    stopStatusPoll();
+                }
+            } catch (e) {}
+        }, 500);
+    }
+
+    function stopStatusPoll() {
+        if (statusPoll) { clearInterval(statusPoll); statusPoll = null; }
+    }
+
+    // ── Run analysis ──
+
+    btnAnalyze.addEventListener('click', async () => {
+        if (!selectedFile) return;
+        btnAnalyze.disabled = true;
+        btnStart.disabled = true;
+        actionStatus.textContent = 'Analyzing... (this may take a moment)';
+        analysisResults.classList.remove('visible');
+        try {
+            const resp = await fetch('/api/test-video/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: selectedFile }),
+            });
+            const result = await resp.json();
+            if (result.error) {
+                actionStatus.textContent = result.error;
+            } else {
+                actionStatus.textContent = '';
+                document.getElementById('ar-total-frames').textContent = result.total_frames;
+                document.getElementById('ar-det-frames').textContent = result.frames_with_detections;
+                document.getElementById('ar-det-rate').textContent = (result.detection_rate * 100).toFixed(1) + '%';
+                document.getElementById('ar-mature-tracks').textContent = result.mature_tracks_formed;
+                document.getElementById('ar-avg-length').textContent = result.avg_track_length + ' frames';
+                document.getElementById('ar-avg-travel').textContent = result.avg_track_travel + ' px';
+                analysisResults.classList.add('visible');
+                loadHistory();
+            }
+        } catch (e) {
+            actionStatus.textContent = 'Analysis error';
+        }
+        updateButtons();
+        setTimeout(() => { if (actionStatus.textContent.includes('error')) actionStatus.textContent = ''; }, 3000);
+    });
+
+    // ── Analysis history ──
+
+    async function loadHistory() {
+        const url = selectedFile
+            ? `/api/test-video/history?filename=${encodeURIComponent(selectedFile)}`
+            : '/api/test-video/history';
+        try {
+            const resp = await fetch(url);
+            const entries = await resp.json();
+            const container = document.getElementById('history-entries');
+            if (entries.length === 0) {
+                container.innerHTML = '<div style="color:#5a7090;font-size:0.78rem;padding:6px;">No analysis history</div>';
+                return;
+            }
+            container.innerHTML = entries.map(e => {
+                const badgeClass = e.category === 'false_positive' ? 'badge-fp' : 'badge-pos';
+                const badgeText = e.category === 'false_positive' ? 'FP' : 'POS';
+                const ts = new Date(e.timestamp * 1000).toLocaleString();
+                return `<div class="history-entry">
+                    <div class="history-header">
+                        <span>${e.filename} <span class="category-badge ${badgeClass}">${badgeText}</span></span>
+                        <span>${ts}</span>
+                    </div>
+                    <div class="history-metrics">
+                        <span>Mature Tracks: ${e.metrics.mature_tracks_formed}</span>
+                        <span>Det. Rate: ${(e.metrics.detection_rate * 100).toFixed(1)}%</span>
+                        <span>Avg Length: ${e.metrics.avg_track_length} frames</span>
+                        <span>Avg Travel: ${e.metrics.avg_track_travel} px</span>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            console.error('Failed to load history:', e);
+        }
+    }
+})();
 </script>
 {% endblock %}

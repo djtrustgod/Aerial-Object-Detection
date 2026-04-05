@@ -277,7 +277,7 @@ class Pipeline:
                         display = self._preprocessor.resize_only(frame)
                         self._stamp_timestamp(display)
                         raw_annotated = self._annotate_fullres(frame, {})
-                        self._clip_writer.feed_frame(display, raw_annotated)
+                        self._clip_writer.feed_frame(display, raw_annotated, frame)
                     else:
                         time.sleep(0.001)  # yield CPU when idle
                     continue
@@ -310,7 +310,7 @@ class Pipeline:
 
                     annotated = self._draw_overlays(display, tracks)
                     raw_annotated = self._annotate_fullres(frame, tracks)
-                    self._clip_writer.feed_frame(annotated, raw_annotated)
+                    self._clip_writer.feed_frame(annotated, raw_annotated, frame)
                 else:
                     # Idle path: HUD only, no preprocessing/tracking/recording
                     self._active_tracks = 0
@@ -445,6 +445,7 @@ class Pipeline:
             avg_x=avg_x,
             avg_y=avg_y,
             avg_speed=avg_speed,
+            trajectory_length=len(positions),
             travel_distance=travel,
             clip_path=clip_path,
         )

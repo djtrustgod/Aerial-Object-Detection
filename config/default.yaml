@@ -23,10 +23,10 @@ detection:
   morph_erode_iterations: 2  # How many passes of shrinking are applied to remove tiny noise blobs
   morph_dilate_iterations: 2 # How many passes of expanding are applied to fill gaps in detected objects
   # Object size filtering
-  min_contour_area: 15       # Smallest object size to consider (pixels²) — filters out single-pixel noise
+  min_contour_area: 5       # Smallest object size to consider (pixels²) — filters out single-pixel noise
   max_contour_area: 500      # Largest object size to consider (pixels²) — filters out clouds and large artifacts
   min_circularity: 0.4       # How round an object must be (0–1) — filters out edge streaks and irregular shapes
-  min_brightness: 100        # Minimum mean brightness of a blob (0–255) — filters out dim noise like clouds and reflections
+  min_brightness: 50        # Minimum mean brightness of a blob (0–255) — filters out dim noise like clouds and reflections
 
 tracking:
   max_distance: 50           # How far (pixels) an object can move between frames and still be the same track

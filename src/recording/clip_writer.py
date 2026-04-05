@@ -33,11 +33,13 @@ class ClipWriter:
         max_pre_frames = int(pre_buffer_seconds * fps) + 1
         self._buffer: deque[np.ndarray] = deque(maxlen=max_pre_frames)
         self._buffer_raw: deque[np.ndarray] = deque(maxlen=max_pre_frames)
+        self._buffer_clean: deque[np.ndarray] = deque(maxlen=max_pre_frames)
 
         # Recording state
         self._recording = False
         self._record_frames: list[np.ndarray] = []
         self._record_frames_raw: list[np.ndarray] = []
+        self._record_frames_clean: list[np.ndarray] = []
         self._record_start_time: float = 0.0
         self._record_end_deadline: float = 0.0
         self._current_clip_path: str | None = None
@@ -55,20 +57,26 @@ class ClipWriter:
         with self._lock:
             self._buffer = deque(self._buffer, maxlen=max_pre_frames)
             self._buffer_raw = deque(self._buffer_raw, maxlen=max_pre_frames)
+            self._buffer_clean = deque(self._buffer_clean, maxlen=max_pre_frames)
 
     def feed_frame(self, frame: np.ndarray,
-                   raw_frame: np.ndarray | None = None) -> None:
+                   raw_frame: np.ndarray | None = None,
+                   clean_frame: np.ndarray | None = None) -> None:
         """Feed a frame to the rolling buffer. If recording, also capture it."""
         with self._lock:
             self._buffer.append(frame.copy())
             if raw_frame is not None and self._full_resolution:
                 self._buffer_raw.append(raw_frame.copy())
+            if clean_frame is not None:
+                self._buffer_clean.append(clean_frame.copy())
 
             if self._recording:
                 if raw_frame is not None and self._full_resolution:
                     self._record_frames_raw.append(raw_frame.copy())
                 else:
                     self._record_frames.append(frame.copy())
+                if clean_frame is not None:
+                    self._record_frames_clean.append(clean_frame.copy())
                 if time.monotonic() >= self._record_end_deadline:
                     self._finish_recording()
 
@@ -94,6 +102,7 @@ class ClipWriter:
                 self._record_frames = []
             else:
                 self._record_frames = list(self._buffer)
+            self._record_frames_clean = list(self._buffer_clean)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"clip_{timestamp}.mp4"
@@ -108,32 +117,48 @@ class ClipWriter:
             frames = self._record_frames_raw.copy()
         else:
             frames = self._record_frames.copy()
+        clean_frames = self._record_frames_clean.copy()
         clip_path = self._current_clip_path
         fps = self._fps
 
         self._recording = False
         self._record_frames = []
         self._record_frames_raw = []
+        self._record_frames_clean = []
         self._current_clip_path = None
 
         if frames and clip_path:
+            # Write annotated clip
             thread = threading.Thread(
                 target=self._write_clip, args=(frames, clip_path, fps),
                 daemon=True,
             )
             thread.start()
 
+            # Write clean clip (high quality, no annotations)
+            if clean_frames:
+                clean_path = clip_path.replace(".mp4", "_clean.mp4")
+                thread_clean = threading.Thread(
+                    target=self._write_clip,
+                    args=(clean_frames, clean_path, fps, True),
+                    daemon=True,
+                )
+                thread_clean.start()
+
     @staticmethod
     def _write_clip(frames: list[np.ndarray], path: str,
-                    fps: float = 15.0) -> None:
+                    fps: float = 15.0, high_quality: bool = False) -> None:
         """Write frames to an H.264 MP4 file (runs in a background thread)."""
         if not frames:
             return
 
+        # CRF 18 = visually lossless for clean archival clips
+        # CRF 28 = smaller file size for annotated clips
+        crf = "18" if high_quality else "28"
         writer = imageio.get_writer(
             path, fps=fps,
             codec="libx264",
-            output_params=["-crf", "28", "-preset", "ultrafast", "-pix_fmt", "yuv420p"],
+            output_params=["-crf", crf, "-preset", "ultrafast", "-pix_fmt", "yuv420p"],
         )
         try:
             for frame in frames:

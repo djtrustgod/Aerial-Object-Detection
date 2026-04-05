@@ -12,7 +12,8 @@
       "Bash(curl:*)",
       "Bash(python3:*)",
       "Bash(git:*)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(kill %1)"
     ]
   }
 }
