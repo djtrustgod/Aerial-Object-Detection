@@ -60,6 +60,18 @@ def _remove_files(base_dir: Path, paths: list[str]) -> int:
     return removed
 
 
+def _purge_clip_dir(clip_dir: Path) -> int:
+    """Remove all .mp4 files from the clip directory. Returns count removed."""
+    removed = 0
+    for fp in clip_dir.glob("*.mp4"):
+        try:
+            fp.unlink()
+            removed += 1
+        except Exception:
+            pass
+    return removed
+
+
 def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
     router = APIRouter()
 
@@ -165,11 +177,13 @@ def create_router(pipeline: Pipeline, templates: Jinja2Templates) -> APIRouter:
         if event_ids:
             clip_paths, thumb_paths = pipeline.event_logger.delete_by_ids(event_ids)
             count = len(event_ids)
+            files_removed = _remove_files(clips_base, clip_paths)
+            files_removed += _remove_files(thumbs_base, thumb_paths)
         else:
             count, clip_paths, thumb_paths = pipeline.event_logger.clear_all()
-
-        files_removed = _remove_files(clips_base, clip_paths)
-        files_removed += _remove_files(thumbs_base, thumb_paths)
+            # Purge entire clip/thumb dirs to catch orphaned _clean files
+            files_removed = _purge_clip_dir(clips_base)
+            files_removed += _purge_clip_dir(thumbs_base)
 
         return JSONResponse({"status": "ok", "deleted": count, "files_removed": files_removed})
 
