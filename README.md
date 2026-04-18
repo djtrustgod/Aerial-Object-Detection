@@ -123,9 +123,11 @@ docker compose down
 docker compose up --build -d --force-recreate
 ```
 
-## Manual Installation
+## Running Directly (Without Docker)
 
-If you prefer to run without Docker:
+If you prefer to run the server directly on your machine instead of using Docker, follow these steps.
+
+### Install
 
 ```bash
 git clone https://github.com/your-username/Aerial-Object-Detection.git
@@ -133,40 +135,57 @@ cd Aerial-Object-Detection
 pip install -e ".[dev]"
 ```
 
-## Quick Start
+### Configure Your Camera
 
-1. **Set your camera URL** — create `config/local.yaml` (gitignored) with your RTSP address:
+Create `config/local.yaml` (gitignored) with your RTSP address:
 
-    ```yaml
-    capture:
-      rtsp_url: "rtsp://192.168.1.100/stream1"
-    ```
+```yaml
+capture:
+  rtsp_url: "rtsp://192.168.1.100/stream1"
+```
 
-    Supported URL formats:
-    - `rtsp://192.168.1.100/stream1` — no auth
-    - `rtsp://192.168.1.100:554/stream1` — custom port
-    - `rtsp://user:pass@192.168.1.100/stream1` — with credentials
-    - `rtsp://user:pass@192.168.1.100:554/stream1` — credentials + port
+Supported URL formats:
+- `rtsp://192.168.1.100/stream1` — no auth
+- `rtsp://192.168.1.100:554/stream1` — custom port
+- `rtsp://user:pass@192.168.1.100/stream1` — with credentials
+- `rtsp://user:pass@192.168.1.100:554/stream1` — credentials + port
 
-    You can also pass the URL via CLI flag or environment variable (see below).
+You can also pass the URL via CLI flag or environment variable (see below).
 
-2. **Run the server:**
+### Start the Server
 
-    ```bash
-    # Using local.yaml config
-    python -m src.main -v
+```bash
+# Using local.yaml config (verbose logging)
+python -m src.main -v
 
-    # Or pass the URL directly
-    python -m src.main -u rtsp://192.168.1.100/stream1
+# Or pass the RTSP URL directly
+python -m src.main -u rtsp://192.168.1.100/stream1
 
-    # Or use a local video file
-    python -m src.main -u path/to/video.mp4
+# Or use a local video file for testing
+python -m src.main -u path/to/video.mp4
 
-    # Custom host and port
-    python -m src.main --host 0.0.0.0 --port 9090
-    ```
+# Custom host and port
+python -m src.main --host 0.0.0.0 --port 9090
 
-3. Open `http://localhost:8080` in your browser to view the dashboard.
+# Environment variable for RTSP URL
+RTSP_URL="rtsp://user:pass@camera-ip/stream1" python -m src.main
+```
+
+Open `http://localhost:8080` in your browser to view the dashboard.
+
+### CLI Options
+
+| Flag | Description | Default |
+|---|---|---|
+| `-c`, `--config` | Path to YAML config file | `config/default.yaml` |
+| `-u`, `--url` | RTSP stream URL or path to a video file | from config |
+| `-v`, `--verbose` | Enable verbose (DEBUG) logging | off |
+| `--host` | Web server bind address | `0.0.0.0` |
+| `--port` | Web server port | `8080` |
+
+### Stopping the Server
+
+Press `Ctrl+C` in the terminal to stop the server.
 
 ## Configuration
 
