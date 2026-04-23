@@ -46,6 +46,10 @@ class ClipWriter:
 
         self._lock = threading.Lock()
 
+        # Encoder threads — tracked so flush() can wait for them before shutdown
+        self._writer_threads: list[threading.Thread] = []
+        self._writer_threads_lock = threading.Lock()
+
     @property
     def fps(self) -> float:
         return self._fps
@@ -128,22 +132,21 @@ class ClipWriter:
         self._current_clip_path = None
 
         if frames and clip_path:
-            # Write annotated clip
-            thread = threading.Thread(
-                target=self._write_clip, args=(frames, clip_path, fps),
-                daemon=True,
-            )
-            thread.start()
+            self._spawn_writer(self._write_clip, (frames, clip_path, fps))
 
             # Write clean clip (high quality, no annotations)
             if clean_frames:
                 clean_path = clip_path.replace(".mp4", "_clean.mp4")
-                thread_clean = threading.Thread(
-                    target=self._write_clip,
-                    args=(clean_frames, clean_path, fps, True),
-                    daemon=True,
+                self._spawn_writer(
+                    self._write_clip, (clean_frames, clean_path, fps, True),
                 )
-                thread_clean.start()
+
+    def _spawn_writer(self, target, args) -> None:
+        thread = threading.Thread(target=target, args=args, daemon=True)
+        with self._writer_threads_lock:
+            self._writer_threads = [t for t in self._writer_threads if t.is_alive()]
+            self._writer_threads.append(thread)
+        thread.start()
 
     @staticmethod
     def _write_clip(frames: list[np.ndarray], path: str,
@@ -171,9 +174,23 @@ class ClipWriter:
             logger.exception("Error writing clip: %s", path)
         finally:
             writer.close()
+            try:
+                out = Path(path)
+                if out.exists() and out.stat().st_size == 0:
+                    out.unlink()
+                    logger.warning("Removed empty clip: %s", path)
+            except OSError:
+                pass
 
-    def flush(self) -> None:
-        """Force-finish any in-progress recording."""
+    def flush(self, writer_timeout: float = 15.0) -> None:
+        """Force-finish any in-progress recording and wait for encoders to finalize."""
         with self._lock:
             if self._recording:
                 self._finish_recording()
+
+        with self._writer_threads_lock:
+            threads = list(self._writer_threads)
+        for t in threads:
+            t.join(timeout=writer_timeout)
+            if t.is_alive():
+                logger.warning("Encoder thread did not finish within %.1fs", writer_timeout)
