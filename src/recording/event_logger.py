@@ -273,6 +273,19 @@ class EventLogger:
         clip_paths, thumb_paths = self.delete_by_ids(event_ids)
         return len(event_ids), clip_paths, thumb_paths
 
+    def get_referenced_clip_names(self) -> set[str]:
+        """Return filenames (basename only) referenced by any event's clip_path,
+        plus the derived _clean companion for each annotated clip."""
+        names: set[str] = set()
+        for row in self._conn.execute("SELECT clip_path FROM events WHERE clip_path IS NOT NULL"):
+            raw = row[0]
+            # DB may store Windows-style backslashes or POSIX slashes
+            name = raw.replace("\\", "/").rsplit("/", 1)[-1]
+            names.add(name)
+            if name.endswith(".mp4") and not name.endswith("_clean.mp4"):
+                names.add(name.replace(".mp4", "_clean.mp4"))
+        return names
+
     def close(self) -> None:
         """Close the database connection."""
         self._conn.close()
@@ -294,3 +307,26 @@ class EventLogger:
             clip_path=row[11],
             thumbnail_path=row[12],
         )
+
+
+def sweep_orphan_clips(clip_dir: str | Path, event_logger: EventLogger) -> int:
+    """Delete *.mp4 files in clip_dir not referenced by any event in the DB.
+
+    Returns the number of files removed.
+    """
+    clip_dir = Path(clip_dir)
+    if not clip_dir.exists():
+        return 0
+
+    referenced = event_logger.get_referenced_clip_names()
+    removed = 0
+    for fp in clip_dir.glob("*.mp4"):
+        if fp.name not in referenced:
+            try:
+                fp.unlink()
+                removed += 1
+            except OSError:
+                logger.exception("Failed to remove orphan clip: %s", fp)
+    if removed:
+        logger.info("Startup sweep removed %d orphan clip file(s) from %s", removed, clip_dir)
+    return removed

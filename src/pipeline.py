@@ -21,7 +21,7 @@ from src.processing.preprocessor import Preprocessor
 from src.processing.detector import Detector
 from src.processing.tracker import CentroidTracker
 from src.recording.clip_writer import ClipWriter
-from src.recording.event_logger import EventLogger
+from src.recording.event_logger import EventLogger, sweep_orphan_clips
 from src.recording.models import DetectionEvent, TrackedObject
 
 from pathlib import Path
@@ -54,6 +54,9 @@ class Pipeline:
             full_resolution=config.recording.clip_full_resolution,
         )
         self._event_logger = EventLogger(config.recording.db_path)
+
+        if config.recording.sweep_orphan_clips:
+            sweep_orphan_clips(config.recording.clip_dir, self._event_logger)
 
         # Thumbnail directory
         self._thumb_dir = Path(config.recording.thumb_dir)

@@ -43,6 +43,7 @@ recording:
   log_dir: "data/logs"       # Folder where application log files are written
   jpeg_quality: 70           # Image quality for saved frames (1–100, higher = better quality, larger files)
   clip_full_resolution: true # Save clips at native camera resolution instead of downscaled 640x360
+  sweep_orphan_clips: true   # On startup, delete any clip files in clip_dir not referenced by the database
 
 web:
   host: "0.0.0.0"            # Network address to listen on — 0.0.0.0 makes the dashboard accessible on all interfaces

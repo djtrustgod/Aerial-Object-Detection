@@ -60,6 +60,7 @@ class RecordingConfig:
     log_dir: str = "data/logs"
     jpeg_quality: int = 70
     clip_full_resolution: bool = True
+    sweep_orphan_clips: bool = True
 
 
 @dataclass

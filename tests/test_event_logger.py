@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from src.recording.event_logger import EventLogger
+from src.recording.event_logger import EventLogger, sweep_orphan_clips
 from src.recording.models import DetectionEvent
 
 
@@ -219,3 +219,47 @@ class TestEventLogger:
         # 3 events remain
         remaining = logger.get_all()
         assert len(remaining) == 3
+
+
+class TestSweepOrphanClips:
+    def test_removes_unreferenced_and_keeps_referenced(self, tmp_path, logger):
+        clip_dir = tmp_path / "clips"
+        clip_dir.mkdir()
+
+        # Files referenced by the DB (annotated + derived _clean)
+        kept_annotated = clip_dir / "clip_kept.mp4"
+        kept_clean = clip_dir / "clip_kept_clean.mp4"
+        kept_annotated.write_bytes(b"keep")
+        kept_clean.write_bytes(b"keep-clean")
+
+        # Orphans (no DB reference)
+        orphan_a = clip_dir / "clip_orphan.mp4"
+        orphan_b = clip_dir / "clip_orphan_clean.mp4"
+        orphan_a.write_bytes(b"drop")
+        orphan_b.write_bytes(b"drop-clean")
+
+        logger.log_event(DetectionEvent(
+            object_id=1, start_time=1000.0, end_time=1010.0,
+            start_frame=0, end_frame=100,
+            avg_x=100.0, avg_y=100.0, avg_speed=5.0,
+            travel_distance=30.0,
+            clip_path=r"data\clips\clip_kept.mp4",
+        ))
+
+        removed = sweep_orphan_clips(str(clip_dir), logger)
+        assert removed == 2
+        assert kept_annotated.exists()
+        assert kept_clean.exists()
+        assert not orphan_a.exists()
+        assert not orphan_b.exists()
+
+    def test_noop_when_dir_missing(self, tmp_path, logger):
+        assert sweep_orphan_clips(str(tmp_path / "does_not_exist"), logger) == 0
+
+    def test_empty_db_removes_all_clips(self, tmp_path, logger):
+        clip_dir = tmp_path / "clips"
+        clip_dir.mkdir()
+        (clip_dir / "a.mp4").write_bytes(b"x")
+        (clip_dir / "b.mp4").write_bytes(b"x")
+        assert sweep_orphan_clips(str(clip_dir), logger) == 2
+        assert list(clip_dir.glob("*.mp4")) == []
