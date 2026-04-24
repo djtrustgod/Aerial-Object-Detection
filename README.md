@@ -173,6 +173,13 @@ RTSP_URL="rtsp://user:pass@camera-ip/stream1" python -m src.main
 
 Open `http://localhost:8080` in your browser to view the dashboard.
 
+### Desktop Launcher (GUI)
+
+If you'd rather not keep a terminal open, double-click `launcher.pyw` at the repo root. It opens a small window with **Start**, **Stop**, and **Open Dashboard** buttons plus a live log tail. The Stop button triggers the same graceful shutdown path as Ctrl+C in a terminal, so in-flight MP4 clips finalize cleanly.
+
+- Change the **Port** field before clicking Start to bind a non-default port.
+- Requires stdlib tkinter only (no extra dependencies) and Python 3.12.
+
 ### CLI Options
 
 | Flag | Description | Default |
