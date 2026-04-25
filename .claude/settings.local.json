@@ -13,7 +13,17 @@
       "Bash(python3:*)",
       "Bash(git:*)",
       "Bash(docker compose:*)",
-      "Bash(kill %1)"
+      "Bash(kill %1)",
+      "Bash(/c/Users/djtru/AppData/Local/Programs/Python/Python312/python.exe *)",
+      "Bash(py -3.12 -m pytest tests/test_clip_writer.py::test_flush_waits_for_encoder_and_writes_nonempty_clip -v)",
+      "Bash(py -3.12 -m pytest tests/)",
+      "Bash(py -3.12 -m pytest tests/ -q --ignore=tests/test_clip_writer.py)",
+      "Bash(py -3.12 -m pytest tests/test_clip_writer.py::test_sustained_retriggers_do_not_grow_frame_list_past_ceiling tests/test_clip_writer.py::test_over_limit_encoders_are_dropped tests/test_clip_writer.py::test_write_clip_removes_zero_byte_output_on_failure -v)",
+      "PowerShell($log = Get-Item \"data/logs/aerial_detect.log\"; \"Size: $\\($log.Length\\), Modified: $\\($log.LastWriteTime\\)\"; Get-Content \"data/logs/aerial_detect.log\" -Tail 5)",
+      "Bash(rm -f /tmp/server.log)",
+      "Bash(python -m src.main -v)",
+      "Bash(echo \"started bg pid $!\")",
+      "PowerShell(Get-Process python -ErrorAction SilentlyContinue | Where-Object {$_.Id -eq 8500 -or $_.StartTime -gt \\(Get-Date\\).AddMinutes\\(-5\\)} | Select-Object Id,CPU,WS,StartTime | Format-Table -AutoSize)"
     ]
   }
 }
