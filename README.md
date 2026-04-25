@@ -165,6 +165,18 @@ Features:
 > Requires Python 3.10+ on `PATH` and the package installed (`pip install -e .`).
 > Always runs the server on port 8080 with verbose logging.
 
+#### Pinnable Desktop Shortcut
+
+Windows 11 will not pin a `.bat` to the taskbar, so to get a one-click pinnable launcher run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\Install-DesktopShortcut.ps1
+```
+
+This renders the project logo to an `.ico` (cached in `%APPDATA%\AerialObjectDetection\`) and creates a Desktop shortcut whose target is `powershell.exe` with `tools\Launch-AerialDetect.ps1` as `-File` and `-WindowStyle Hidden` so only the GUI appears. Then right-click the Desktop shortcut → **"Show more options"** → **"Pin to taskbar"**.
+
+Re-running the installer overwrites the shortcut and icon — safe to do at any time.
+
 ### Start the Server
 
 ```bash
