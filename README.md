@@ -152,6 +152,19 @@ Supported URL formats:
 
 You can also pass the URL via CLI flag or environment variable (see below).
 
+### Windows GUI Launcher
+
+A WinForms launcher is available in `tools/`. Double-click **`tools/launch.bat`** to open it — no PowerShell configuration required.
+
+Features:
+- **Start / Stop** button with live status indicator (Stopped / Starting / Running / Stopping / Crashed) — the project logo above the button recolors to match
+- Scrollable **log console** showing server stdout and stderr in real time
+- Dashboard opens automatically when the server is ready
+- Graceful shutdown on stop or window close, with 15-second force-kill fallback
+
+> Requires Python 3.10+ on `PATH` and the package installed (`pip install -e .`).
+> Always runs the server on port 8080 with verbose logging.
+
 ### Start the Server
 
 ```bash
@@ -172,13 +185,6 @@ RTSP_URL="rtsp://user:pass@camera-ip/stream1" python -m src.main
 ```
 
 Open `http://localhost:8080` in your browser to view the dashboard.
-
-### Desktop Launcher (GUI)
-
-If you'd rather not keep a terminal open, double-click `launcher.pyw` at the repo root. It opens a small window with **Start**, **Stop**, and **Open Dashboard** buttons plus a live log tail. The Stop button triggers the same graceful shutdown path as Ctrl+C in a terminal, so in-flight MP4 clips finalize cleanly.
-
-- Change the **Port** field before clicking Start to bind a non-default port.
-- Requires stdlib tkinter only (no extra dependencies) and Python 3.12.
 
 ### CLI Options
 

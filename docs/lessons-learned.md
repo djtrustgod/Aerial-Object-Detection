@@ -27,3 +27,22 @@ Hard-won lessons from bugs and near-misses in this project. Follow these during 
 2. For pipeline features, trace the full path: detection -> event publish -> DB insert -> API response -> UI display. Check each hop.
 3. Check that response bodies contain **expected data**, not just a success status code.
 4. When a feature has been running for a while, spot-check that it's still producing the expected artifacts (DB rows, files, thumbnails) before moving on.
+
+---
+
+## 3. Don't Run PowerShell Scriptblocks on .NET Background Threads
+
+**Incident:** v0.4.7 — The first cut of `tools/Launch-AerialDetect.ps1` registered PowerShell scriptblocks as `Process.OutputDataReceived` / `ErrorDataReceived` / `Exited` handlers. Those events fire on .NET thread-pool threads. Symptoms cascaded across three rewrites:
+
+1. **Synchronous `$form.Invoke([Action]{...})`** from the handler — deadlock. The background thread held the PS runspace, then blocked waiting for the UI thread; the UI thread needed the runspace to execute the delegate. Window froze, looked like a crash.
+2. **`$form.BeginInvoke([Action]{...})`** to break the deadlock — async fire meant `$line`/`$color` were null by the time the action ran. PS closures don't retain function-local variables across an async hop.
+3. **`{...}.GetNewClosure()`** to snapshot the values — the GUI vanished on the first child-process write to stdout, with no managed exception, no crash log, no dialog. The PS host process exited outside .NET's exception system.
+
+PowerShell 5.1's runspace is single-threaded and not designed to be re-entered from arbitrary .NET threads. Any path that lets the thread pool call PS code is an unbounded source of these failures.
+
+**Rule:** When integrating PowerShell with .NET event sources that fire on background threads:
+
+1. Do the bridging in **compiled C#** via `Add-Type`. Push to a `ConcurrentQueue` (or similar). Never let a PowerShell scriptblock be the event handler.
+2. Drain the queue from the UI thread (a WinForms `Timer` is fine). All PS code stays on one thread.
+3. If you must use a PS scriptblock as a delegate, prove it's only invoked synchronously on the runspace's own thread before relying on it.
+4. When a hosted process exits without throwing — no dialog, no log, no exception — assume the failure happened in native code below the CLR. Look for cross-thread runtime re-entry, not for a missing `try/catch`.
