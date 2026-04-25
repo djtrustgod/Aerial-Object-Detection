@@ -21,13 +21,20 @@ class ClipWriter:
 
     def __init__(self, clip_dir: str, pre_buffer_seconds: float = 3.0,
                  post_buffer_seconds: float = 5.0, fps: float = 30.0,
-                 full_resolution: bool = False):
+                 full_resolution: bool = False,
+                 max_clip_seconds: float = 60.0,
+                 max_concurrent_encoders: int = 2):
         self._clip_dir = Path(clip_dir)
         self._clip_dir.mkdir(parents=True, exist_ok=True)
         self._pre_buffer_seconds = pre_buffer_seconds
         self._post_buffer_seconds = post_buffer_seconds
         self._fps = fps
         self._full_resolution = full_resolution
+        # Hard ceiling on a single clip's duration. Without this, a noisy sky
+        # can re-trigger detections every frame, pushing _record_end_deadline
+        # forward forever and growing the in-memory frame list until OOM.
+        self._max_clip_seconds = max_clip_seconds
+        self._max_concurrent_encoders = max(1, max_concurrent_encoders)
 
         # Rolling pre-buffer
         max_pre_frames = int(pre_buffer_seconds * fps) + 1
@@ -81,7 +88,21 @@ class ClipWriter:
                     self._record_frames.append(frame.copy())
                 if clean_frame is not None:
                     self._record_frames_clean.append(clean_frame.copy())
-                if time.monotonic() >= self._record_end_deadline:
+                # Defensive frame-count ceiling in case monotonic clock drifts
+                # or the deadline check is somehow bypassed. At max_clip_seconds
+                # × fps, any further frames mean we're running away.
+                max_frames = int(self._max_clip_seconds * self._fps) + 1
+                over_limit = (
+                    len(self._record_frames) > max_frames
+                    or len(self._record_frames_raw) > max_frames
+                    or len(self._record_frames_clean) > max_frames
+                )
+                if time.monotonic() >= self._record_end_deadline or over_limit:
+                    if over_limit:
+                        logger.warning(
+                            "Clip frame count exceeded ceiling (%d frames); "
+                            "finalizing early to protect memory", max_frames,
+                        )
                     self._finish_recording()
 
     def trigger_recording(self) -> str | None:
@@ -91,14 +112,17 @@ class ClipWriter:
             deadline = now + self._post_buffer_seconds
 
             if self._recording:
-                # Extend the recording deadline
-                self._record_end_deadline = deadline
+                # Extend the recording deadline, but never past the hard ceiling.
+                hard_ceiling = self._record_start_time + self._max_clip_seconds
+                self._record_end_deadline = min(deadline, hard_ceiling)
                 return self._current_clip_path
 
             # Start new recording
             self._recording = True
             self._record_start_time = now
-            self._record_end_deadline = deadline
+            self._record_end_deadline = min(
+                deadline, now + self._max_clip_seconds
+            )
 
             # Include pre-buffer frames
             if self._full_resolution and self._buffer_raw:
@@ -142,9 +166,21 @@ class ClipWriter:
                 )
 
     def _spawn_writer(self, target, args) -> None:
-        thread = threading.Thread(target=target, args=args, daemon=True)
         with self._writer_threads_lock:
             self._writer_threads = [t for t in self._writer_threads if t.is_alive()]
+            if len(self._writer_threads) >= self._max_concurrent_encoders:
+                # Drop rather than queue: blocking the caller would stall the
+                # capture pipeline; queueing would let backlog grow unboundedly.
+                # A dropped clip is recoverable (we'll catch the next event);
+                # a stalled pipeline is not.
+                logger.warning(
+                    "Encoder pool at capacity (%d); dropping clip to protect memory. "
+                    "Arg sample: %r",
+                    self._max_concurrent_encoders,
+                    args[1] if len(args) > 1 else args,
+                )
+                return
+            thread = threading.Thread(target=target, args=args, daemon=True)
             self._writer_threads.append(thread)
         thread.start()
 
