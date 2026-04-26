@@ -33,7 +33,7 @@ Nighttime aerial object detection system using classical computer vision. Connec
 - Python 3.10+
 - An RTSP camera or video file for input
 
-## Docker Deployment (Recommended)
+## Docker Deployment
 
 The easiest way to run the system is with Docker. A single command builds and starts everything.
 
