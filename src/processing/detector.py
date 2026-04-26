@@ -88,6 +88,9 @@ class Detector:
             cv2.drawContours(mask, [contour], -1, 255, -1)
             brightness = float(cv2.mean(gray_frame, mask=mask)[0])
 
+            if brightness < self._cfg.min_brightness:
+                continue
+
             detections.append(Detection(
                 x=cx, y=cy, w=w, h=h,
                 area=area, brightness=brightness,

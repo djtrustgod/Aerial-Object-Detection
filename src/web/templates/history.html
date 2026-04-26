@@ -3,12 +3,43 @@
 {% block title %}History - Aerial Detection{% endblock %}
 
 {% block content %}
+<!-- Session navigation -->
+{% if sessions %}
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header">
+        <h3 style="margin: 0; font-size: 1rem;">
+            {% if sessions|length > 0 and current_session %}
+                {% set s = sessions[current_session - 1] %}
+                Session: {{ s.start_time | format_ts }} – {{ s.end_time | format_ts }}
+                ({{ s.event_count }} events)
+            {% endif %}
+        </h3>
+        <div class="filter-controls">
+            {% if current_session and current_session < sessions|length %}
+            <a href="/history?session={{ current_session + 1 }}" class="btn">&laquo; Older</a>
+            {% else %}
+            <button class="btn" disabled>&laquo; Older</button>
+            {% endif %}
+            <span style="padding: 0 0.5rem; color: #aaa;">Page {{ current_session or 1 }} of {{ sessions|length }}</span>
+            {% if current_session and current_session > 1 %}
+            <a href="/history?session={{ current_session - 1 }}" class="btn">Newer &raquo;</a>
+            {% else %}
+            <button class="btn" disabled>Newer &raquo;</button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="card">
     <div class="card-header">
         <h2>Detection History</h2>
         <div class="filter-controls">
             <button class="btn" onclick="refreshHistory()">Refresh</button>
             <button class="btn btn-danger" id="delete-btn" onclick="deleteSelected()" disabled>Delete Selected</button>
+            {% if current_session %}
+            <button class="btn btn-danger" onclick="deleteSession({{ current_session }})">Delete Session</button>
+            {% endif %}
         </div>
     </div>
     <div class="card-body">
@@ -17,10 +48,11 @@
                 <tr>
                     <th><input type="checkbox" id="select-all" title="Select all"></th>
                     <th>ID</th>
+                    <th>Thumb</th>
                     <th>Time</th>
                     <th>Position</th>
                     <th>Speed</th>
-                    <th>Track Length</th>
+                    <th>Travel</th>
                     <th>Clip</th>
                 </tr>
             </thead>
@@ -29,10 +61,19 @@
                 <tr class="event-row">
                     <td><input type="checkbox" class="row-check" value="{{ event.event_id }}"></td>
                     <td>{{ event.event_id }}</td>
+                    <td>
+                        {% if event.thumbnail_path %}
+                        <a href="/thumbs/{{ event.thumbnail_path }}" target="_blank">
+                            <img src="/thumbs/{{ event.thumbnail_path }}" alt="thumb" style="width:80px; height:45px; object-fit:cover; border-radius:3px;">
+                        </a>
+                        {% else %}
+                        --
+                        {% endif %}
+                    </td>
                     <td>{{ event.start_time | format_ts }}</td>
                     <td>({{ "%.0f"|format(event.avg_x) }}, {{ "%.0f"|format(event.avg_y) }})</td>
                     <td>{{ "%.1f"|format(event.avg_speed) }} px/f</td>
-                    <td>{{ event.trajectory_length }}</td>
+                    <td>{{ "%.0f"|format(event.travel_distance) }} px</td>
                     <td>
                         {% if event.clip_path %}
                         <a href="/clips/{{ event.clip_path | basename }}" target="_blank" class="btn btn-small">Play</a>
@@ -43,7 +84,7 @@
                 </tr>
                 {% endfor %}
                 {% if not events %}
-                <tr><td colspan="7" class="empty-state">No events recorded yet</td></tr>
+                <tr><td colspan="8" class="empty-state">No events recorded yet</td></tr>
                 {% endif %}
             </tbody>
         </table>
@@ -75,6 +116,8 @@
 
 {% block scripts %}
 <script>
+const CURRENT_SESSION = {{ current_session or 'null' }};
+
 function updateDeleteButton() {
     const count = document.querySelectorAll('.row-check:checked').length;
     const all = document.querySelectorAll('.row-check');
@@ -115,19 +158,24 @@ async function deleteSelected() {
         : { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event_ids: checked.map(cb => parseInt(cb.value)) }) };
     const resp = await fetch('/api/events', fetchOpts);
     const result = await resp.json();
-    if (result.status === 'ok') await refreshHistory();
+    if (result.status === 'ok') location.reload();
+}
+
+async function deleteSession(sessionId) {
+    if (!confirm('Delete all events in this session?')) return;
+    const resp = await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+    const result = await resp.json();
+    if (result.status === 'ok') location.href = '/history';
 }
 
 async function refreshHistory() {
-    const resp = await fetch('/api/events?limit=100');
-    const events = await resp.json();
-    renderTable(events);
+    location.reload();
 }
 
 function renderTable(events) {
     const tbody = document.querySelector('#history-table tbody');
     if (events.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No events found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No events found</td></tr>';
         updateDeleteButton();
         return;
     }
@@ -135,10 +183,11 @@ function renderTable(events) {
         <tr class="event-row">
             <td><input type="checkbox" class="row-check" value="${e.event_id}"></td>
             <td>${e.event_id || '--'}</td>
+            <td>${e.thumbnail_path ? `<a href="/thumbs/${e.thumbnail_path}" target="_blank"><img src="/thumbs/${e.thumbnail_path}" alt="thumb" style="width:80px; height:45px; object-fit:cover; border-radius:3px;"></a>` : '--'}</td>
             <td>${new Date(e.start_time * 1000).toLocaleString('en-US', {month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true})}</td>
             <td>(${e.avg_x.toFixed(0)}, ${e.avg_y.toFixed(0)})</td>
             <td>${e.avg_speed.toFixed(1)} px/f</td>
-            <td>${e.trajectory_length}</td>
+            <td>${e.travel_distance.toFixed(0)} px</td>
             <td>${e.clip_path ? `<a href="/clips/${e.clip_path.replace(/\\/g, '/').split('/').pop()}" target="_blank" class="btn btn-small">Play</a>` : '--'}</td>
         </tr>
     `).join('');

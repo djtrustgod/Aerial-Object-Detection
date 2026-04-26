@@ -6,8 +6,10 @@ import numpy as np
 import pytest
 
 from src.config import (
+    AppConfig,
     DetectionConfig,
     ProcessingConfig,
+    RecordingConfig,
     TrackingConfig,
 )
 
@@ -19,6 +21,7 @@ def detection_config() -> DetectionConfig:
         min_contour_area=3,
         max_contour_area=500,
         min_circularity=0.1,
+        min_brightness=0,  # disabled by default in tests
     )
 
 
@@ -28,6 +31,7 @@ def tracking_config() -> TrackingConfig:
         max_distance=50,
         max_disappeared=5,
         min_track_length=3,
+        min_total_travel=0.0,  # disabled by default in tests
     )
 
 

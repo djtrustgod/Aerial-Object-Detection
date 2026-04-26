@@ -12,6 +12,7 @@ import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from src.pipeline import Pipeline
+from src.web.test_pipeline import get_active_test
 
 logger = logging.getLogger(__name__)
 
@@ -115,5 +116,43 @@ def create_ws_router(pipeline: Pipeline) -> APIRouter:
             logger.exception("Events WebSocket error")
         finally:
             manager.disconnect_events(ws)
+
+    @router.websocket("/ws/test-stream")
+    async def ws_test_stream(ws: WebSocket):
+        """Stream annotated frames from the test pipeline."""
+        await ws.accept()
+        sent_complete = False
+        try:
+            while True:
+                active = get_active_test()
+                if active is None or (not active.is_running and not active.is_complete):
+                    # No test running — send placeholder
+                    placeholder = np.zeros((360, 640, 3), dtype=np.uint8)
+                    cv2.putText(placeholder, "Upload a video and click Start",
+                                (100, 190), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                                (0, 200, 0), 2)
+                    _, buffer = cv2.imencode(".jpg", placeholder,
+                                            [cv2.IMWRITE_JPEG_QUALITY, 70])
+                    await ws.send_bytes(buffer.tobytes())
+                else:
+                    frame = active.display_frame
+                    if frame is not None:
+                        quality = pipeline.config.web.stream_quality
+                        _, buffer = cv2.imencode(
+                            ".jpg", frame,
+                            [cv2.IMWRITE_JPEG_QUALITY, quality]
+                        )
+                        await ws.send_bytes(buffer.tobytes())
+
+                    # Send completion signal once
+                    if active.is_complete and not sent_complete:
+                        await ws.send_text(json.dumps({"type": "complete"}))
+                        sent_complete = True
+
+                await asyncio.sleep(0.1)
+        except WebSocketDisconnect:
+            pass
+        except Exception:
+            logger.exception("Test stream WebSocket error")
 
     return router

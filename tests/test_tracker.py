@@ -97,3 +97,42 @@ class TestCentroidTracker:
 
         obj = list(tracks.values())[0]
         assert obj.speed == pytest.approx(10.0, abs=0.1)
+
+    def test_travel_distance_in_mature_objects(self, tracking_config):
+        """Mature objects should have accumulated sufficient travel distance."""
+        tracking_config.min_track_length = 3
+        tracking_config.min_total_travel = 0.0
+        tracker = CentroidTracker(tracking_config)
+
+        # Object moves 10px/frame for 5 frames → travel ≈ 40px
+        for i in range(5):
+            tracker.update([make_detection(100 + i * 10, 100, frame=i)])
+
+        mature = tracker.mature_objects
+        assert len(mature) == 1
+
+    def test_min_total_travel_filters_stationary(self, tracking_config):
+        """Nearly stationary objects should be excluded by min_total_travel."""
+        tracking_config.min_track_length = 3
+        tracking_config.min_total_travel = 30.0
+        tracker = CentroidTracker(tracking_config)
+
+        # Object barely moves (1px/frame for 5 frames → travel ≈ 4px)
+        for i in range(5):
+            tracker.update([make_detection(100 + i, 100, frame=i)])
+
+        mature = tracker.mature_objects
+        assert len(mature) == 0
+
+    def test_min_total_travel_passes_moving(self, tracking_config):
+        """Fast-moving objects should pass the min_total_travel filter."""
+        tracking_config.min_track_length = 3
+        tracking_config.min_total_travel = 30.0
+        tracker = CentroidTracker(tracking_config)
+
+        # Object moves 10px/frame for 5 frames → travel ≈ 40px
+        for i in range(5):
+            tracker.update([make_detection(100 + i * 10, 100, frame=i)])
+
+        mature = tracker.mature_objects
+        assert len(mature) == 1
