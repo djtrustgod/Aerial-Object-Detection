@@ -1,6 +1,6 @@
 # Fix low-framerate detection clips
 
-**Status:** proposed, not yet implemented (drafted on branch `dev/clip-framerate-dedup`)
+**Status:** implemented on branch `dev/clip-framerate-dedup` as three commits (diagnostic logging, dedup fix, RTSP fps sanity check). See [Implementation notes](#implementation-notes) at the bottom for what landed and any deltas from the original plan.
 
 ## Symptoms
 
@@ -132,3 +132,17 @@ If you want one commit instead of three, that's fine too — the fix in step 1 i
 ## Conversation context (in case useful for the next session)
 
 This plan was drafted with a prior Claude session that initially hypothesized CPU-bound under-feeding. The user (machine-owner) correctly pushed back: *"why concern about CPU when this app uses a fraction of the machine's CPU?"* That reframing pointed the diagnosis at over-feeding (process loop faster than camera), which matches the symptom precisely and is what this plan fixes. The earlier wrong hypothesis is preserved in the section above ("Why CPU is *not* the bottleneck") so the next session understands why the fix isn't about CPU optimization despite the original framing.
+
+## Implementation notes
+
+Landed in three commits on `dev/clip-framerate-dedup`:
+
+1. **`Add diagnostic logging for clip frame-rate sanity check`** — adds a `Finalizing clip: N frames, fps=X, real=Ys (expected M frames; ratio R)` INFO log in `ClipWriter._finish_recording`. The plan implied new state would be needed (`_record_start_time`); turned out [`ClipWriter`](../../src/recording/clip_writer.py) already had it (set in `trigger_recording`), so this commit was just the log line.
+
+2. **`Sync process loop to camera frame arrival (dedupe by frame_num)`** — the actual fix, exactly as drafted. Loop variable `last_frame_num`; skip + 5ms yield when `frame_num == last_frame_num`.
+
+3. **`Detect mismatched RTSP camera FPS at connect`** — added `_sample_arrival_rate()` to `FrameGrabber`, called once per decoded frame for the first 30 frames after each (re)connect. Logs at INFO if values agree, WARNs and overrides `self._fps` if they disagree by >10%. One small delta from the plan: `Pipeline._process_loop` previously latched `grabber.fps` once via a `fps_set` bool, which would have missed the post-connect override. Replaced the latch with a track-last-applied check (`applied_fps`) so any change in `grabber.fps` propagates to `clip_writer.fps`.
+
+### Verification
+
+After implementation, the next live run should show new INFO lines on each clip finalize. Pre-fix history (any `clip_*.mp4` from before this branch's commits) should produce ratio > 1.0 if reprocessed; post-fix clips should be at ratio ≈ `1 + (pre_buffer_seconds / real_duration)` — i.e. close to 1.0 for normal-length clips and a bit above for very short ones (because the pre-buffer adds frames recorded before the trigger, which inflate the count without inflating `real_duration`). A persistently large ratio above that bound means the fix isn't holding and something is feeding duplicates back in.
