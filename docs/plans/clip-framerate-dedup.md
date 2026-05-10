@@ -146,3 +146,25 @@ Landed in three commits on `dev/clip-framerate-dedup`:
 ### Verification
 
 After implementation, the next live run should show new INFO lines on each clip finalize. Pre-fix history (any `clip_*.mp4` from before this branch's commits) should produce ratio > 1.0 if reprocessed; post-fix clips should be at ratio ≈ `1 + (pre_buffer_seconds / real_duration)` — i.e. close to 1.0 for normal-length clips and a bit above for very short ones (because the pre-buffer adds frames recorded before the trigger, which inflate the count without inflating `real_duration`). A persistently large ratio above that bound means the fix isn't holding and something is feeding duplicates back in.
+
+### Runtime verification on 2026-05-10
+
+First post-implementation run produced a striking observation that the plan only flagged as a hedge:
+
+```
+2026-05-10 14:31:17  Connected to stream: rtsp://...  (20.0 FPS)
+2026-05-10 14:31:18  Camera FPS mismatch: CAP_PROP_FPS=20.0, measured=35.0 over 30 frames (0.83s). Using measured value.
+```
+
+The configured RTSP camera reports 20 FPS via `CAP_PROP_FPS` but actually delivers 35 FPS. This means the original symptom was worse than the plan estimated:
+
+- Plan's working model: loop ticking at ~30 Hz over camera at ~20 Hz → 1.5× slow-mo.
+- Actual: loop bounded by camera at ~35 Hz, writer tagged at the falsely-reported 20 → **1.75× slow-mo**.
+
+Crucially, both commits 2 and 3 are load-bearing. The dedup alone (commit `707fb93`) would still produce 35-fed clips tagged at the camera's wrong-reported 20 — playback would remain slow-mo. The arrival-rate override (commit `4b1cd96`) is what makes the tag honest.
+
+Verified end-to-end:
+- T5 (FPS sanity check): **passed**, with the mismatch above.
+- T7 (dashboard regression): **passed** — `/`, `/history`, `/settings`, `/zones`, `/api/stats` all 200, `connected: true`, no exceptions or ERROR/WARN lines other than the expected mismatch warning.
+- T1 / T3 / T4 / T8 / T9 / T10 (clip lifecycle): **not exercised in the 2026-05-10 run** — daytime sky on the configured camera produced no motion for the night-tuned detector (`active_tracks=0` over 30s with schedule overridden on). These tests need real motion in front of the camera. See [test plan run history](../test-plans/clip-framerate-dedup.md#run-history) for the full list.
+- T2 (visual A/B), T6 (URL change): deferred until a clip exists.

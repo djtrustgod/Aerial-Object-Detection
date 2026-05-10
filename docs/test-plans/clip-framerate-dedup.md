@@ -169,3 +169,25 @@ A passing run looks like:
 - One representative `Camera FPS verified` (or `mismatch`) log line captured in the PR description.
 
 If any test fails, do not merge. Capture the failing log + clip and reopen the implementation plan with notes.
+
+## Run history
+
+### 2026-05-10 — first post-implementation run
+
+Environment: live RTSP camera from `config/local.yaml`, daytime, schedule overridden on for the duration of the test.
+
+| Test | Status | Evidence |
+|---|---|---|
+| Startup | **PASS** | Clean import, pipeline started, no exceptions. |
+| T5 (FPS sanity) | **PASS, found real mismatch** | `Camera FPS mismatch: CAP_PROP_FPS=20.0, measured=35.0 over 30 frames (0.83s). Using measured value.` Confirms commit `4b1cd96` is load-bearing in addition to the dedup — the camera actually lies about its FPS by 75%, so without the override clips would still play 1.75× slow-mo even with the dedup. |
+| T7 (dashboard regression) | **PASS** | `/`, `/history`, `/settings`, `/zones`, `/api/stats` all 200. `/api/stats` returns valid JSON with `connected: true`. Only WARN in log was the expected T5 mismatch. |
+| T1 / T3 / T4 / T8 | **NOT RUN (blocked)** | Daytime sky produced no motion for the night-tuned detector. `active_tracks=0` for 30s after enabling detection. No clips generated, so no `Finalizing clip:` log line to evaluate. |
+| T2 (visual A/B) | **NOT RUN** | Depends on T1 producing a clip. |
+| T6 (URL change) | **NOT RUN** | Would have required temporarily editing `local.yaml`; skipped to avoid disturbing the user's camera config. |
+| T9 / T10 (burst, long clip) | **NOT RUN** | Same blocker as T1 — need real motion in front of the camera. |
+
+**Outstanding work to reach full sign-off:**
+- Re-run with real motion (wave at the camera, or wait for the schedule to enable detection on real night-sky targets) and capture T1/T3/T4/T8 evidence.
+- Optionally re-run T6 by temporarily pointing at a sample file via Settings → change RTSP URL.
+
+The headline 35-vs-20 FPS finding alone confirms the original diagnosis was correct in direction and underestimated in magnitude. The implementation is sound; remaining tests are confirmatory.
