@@ -243,6 +243,7 @@ class Pipeline:
         fps_timer = time.monotonic()
         fps_frame_count = 0
         was_active = False
+        last_frame_num = -1
 
         # Set FPS on components once connected
         fps_set = False
@@ -257,6 +258,16 @@ class Pipeline:
                     fps_timer = time.monotonic()
                     time.sleep(0.01)
                     continue
+
+                # Skip if the grabber hasn't produced a new frame yet. Without
+                # this, the loop runs faster than the camera and feeds the
+                # clip writer the same frame multiple times — clips end up
+                # tagged at camera fps but stuffed with duplicates, which
+                # plays back as slow-mo stutter.
+                if frame_num == last_frame_num:
+                    time.sleep(0.005)
+                    continue
+                last_frame_num = frame_num
 
                 # Set FPS from stream on first frame
                 if not fps_set and self._grabber.is_connected:
