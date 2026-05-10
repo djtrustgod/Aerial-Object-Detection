@@ -245,8 +245,10 @@ class Pipeline:
         was_active = False
         last_frame_num = -1
 
-        # Set FPS on components once connected
-        fps_set = False
+        # Track the last fps applied to the clip writer. The grabber may
+        # update its own fps after connect (see _sample_arrival_rate), so we
+        # re-apply whenever it changes rather than latching once.
+        applied_fps: float | None = None
 
         while self._running:
             try:
@@ -269,10 +271,14 @@ class Pipeline:
                     continue
                 last_frame_num = frame_num
 
-                # Set FPS from stream on first frame
-                if not fps_set and self._grabber.is_connected:
-                    self._clip_writer.fps = self._grabber.fps
-                    fps_set = True
+                # Apply (or re-apply) grabber fps to the clip writer when it
+                # changes — covers both first connect and post-connect
+                # arrival-rate overrides.
+                if self._grabber.is_connected:
+                    current_fps = self._grabber.fps
+                    if current_fps != applied_fps:
+                        self._clip_writer.fps = current_fps
+                        applied_fps = current_fps
 
                 # Compute detection state once per iteration
                 in_schedule = self._detection_enabled and (self._schedule_override or self._is_in_schedule())
