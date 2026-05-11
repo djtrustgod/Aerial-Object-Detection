@@ -271,6 +271,16 @@ class Pipeline:
                     continue
                 last_frame_num = frame_num
 
+                # Measure RTSP arrival rate at the point of unique-frame
+                # arrival, before frame_skip drops anything — so the HUD/stats
+                # FPS reflects the stream itself, not the detection cadence.
+                fps_frame_count += 1
+                elapsed = time.monotonic() - fps_timer
+                if elapsed >= 1.0:
+                    self._fps_actual = fps_frame_count / elapsed
+                    fps_frame_count = 0
+                    fps_timer = time.monotonic()
+
                 # Apply (or re-apply) grabber fps to the clip writer when it
                 # changes — covers both first connect and post-connect
                 # arrival-rate overrides.
@@ -340,14 +350,6 @@ class Pipeline:
                     # Discard if URL changed while this frame was being processed
                     if self._url_version == url_ver:
                         self._display_frame = annotated
-
-                # FPS calculation
-                fps_frame_count += 1
-                elapsed = time.monotonic() - fps_timer
-                if elapsed >= 1.0:
-                    self._fps_actual = fps_frame_count / elapsed
-                    fps_frame_count = 0
-                    fps_timer = time.monotonic()
 
             except Exception:
                 logger.exception("Error in process loop, recovering...")
