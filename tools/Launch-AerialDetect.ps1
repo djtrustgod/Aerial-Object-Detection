@@ -45,7 +45,6 @@ public static class LogPump {
 }
 "@
 
-$VERSION    = "0.4.7"
 $repoRoot   = Split-Path $PSScriptRoot -Parent
 $DEFAULT_PORT         = 8080
 $script:proc          = $null
@@ -221,7 +220,7 @@ $logDrainTimer.add_Tick({
 
 # ── build form ─────────────────────────────────────────────────────────────────
 $form               = [System.Windows.Forms.Form]::new()
-$form.Text          = "Aerial Object Detection Launcher  v$VERSION"
+$form.Text          = "Aerial Object Detection Launcher"
 $form.Size          = [System.Drawing.Size]::new(720, 540)
 $form.MinimumSize   = [System.Drawing.Size]::new(520, 400)
 $form.BackColor     = [System.Drawing.Color]::FromArgb(30, 30, 30)
@@ -355,7 +354,7 @@ $form.add_FormClosing({
 })
 
 $form.add_Shown({
-    Append-Log "Aerial Object Detection Launcher v$VERSION" ([System.Drawing.Color]::Cyan)
+    Append-Log "Aerial Object Detection Launcher" ([System.Drawing.Color]::Cyan)
     Append-Log "Repo: $repoRoot" ([System.Drawing.Color]::DarkGray)
     Append-Log "Click Start to launch the server." ([System.Drawing.Color]::DarkGray)
 })
