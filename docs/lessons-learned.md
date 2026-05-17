@@ -64,3 +64,22 @@ PowerShell 5.1's runspace is single-threaded and not designed to be re-entered f
 4. When debugging a slow-mo / fast-forward / stutter symptom, log `frames_written / (fps_tag * real_duration)`. Ratio > 1 = over-feeding (duplicates). Ratio < 1 = under-feeding (CPU or network bound). The number tells you which way the loop is racing the source.
 
 **Postscript (verified 2026-05-10):** First post-fix run on the configured RTSP camera produced `Camera FPS mismatch: CAP_PROP_FPS=20.0, measured=35.0`. The camera underreports its own delivery rate by ~75%. That made the "and the camera tag may also be wrong" hedge from the plan into the *primary* effect on this hardware: even with perfect dedup, the writer would have been tagged at the camera's claimed 20 fps while fed at the real 35 fps, leaving the clips slow-mo. Two takeaways: (a) the arrival-rate sanity check was load-bearing, not just insurance — keep it; (b) for any future sensor-fed pipeline, assume the sensor's self-reported rate is a lie until measured, and budget for a measurement step on first connect.
+
+---
+
+## 5. Don't Accumulate Full-Resolution Frames in Python Lists — Stream to the Encoder
+
+**Incident:** v0.5.0 — Live memory observation showed resident set oscillating between 3 GB and 8 GB with a clear sawtooth pattern tied to clip-recording cycles. Investigation found `ClipWriter` was appending `.copy()` of every captured frame to two unbounded Python lists (`_record_frames_raw` and `_record_frames_clean`) for the duration of each clip, then handing the entire lists to a background encoder thread at finalization. With `clip_full_resolution: true` and a 1080p stream, a single 60-second clip held ~17 GB of full-resolution frames in memory at peak. A noisy sky that re-triggered detections every frame would push toward the hard ceiling on every clip. The misleading thing was that the existing `max_clip_seconds × fps` "defensive ceiling" looked like a memory bound — it caps the *clip length*, but the memory bound is still `O(clip_length × frame_size × 2)`, which at 1080p is two orders of magnitude bigger than RAM.
+
+Two separate things compounded the symptom:
+
+- The pre-buffer deques (`_buffer_raw`, `_buffer_clean`) were bounded but never cleared on idle, so ~1 GB of stale full-resolution frames sat in memory across the daytime when the schedule said detection was off.
+- A bug elsewhere (sticky `_schedule_override`) meant detection was actually running all day instead of just inside the configured window, which is why the symptom was observable at all — without the override bug, the memory bloat would only have shown up at night.
+
+**Rule:** When a pipeline produces frames at one rate and consumes them at another (encoder, network, disk), don't bridge the gap with an unbounded list:
+
+1. Stream from producer to consumer through a **bounded** queue. The queue depth is the memory bound — pick it deliberately (we used `pre_buffer_frames + 30`).
+2. When the consumer can't keep up, drop at the tail with a rate-limited warning rather than blocking the producer or growing the buffer. A capture loop that stalls is worse than a clip with a few missing frames at the end.
+3. The encoder/consumer thread should be started **when recording begins**, not at finalization. Streaming means the encoder is making progress the entire time the clip is being captured, not racing to catch up at the end.
+4. Don't trust a length-bound (max_clip_seconds, max_packet_count) to bound memory. Frame size × concurrency multiplies it back up. Memory bounds must be expressed in bytes-equivalent units, not items.
+5. Bounded buffers must be **cleared on state transitions**, not just bounded. A 90-frame deque is fine; a 90-frame deque that sits full of 6 MB frames for 14 hours of idle time is half a gigabyte of waste.

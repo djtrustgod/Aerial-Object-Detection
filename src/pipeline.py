@@ -83,8 +83,13 @@ class Pipeline:
 
         # Manual detection toggle (session-only, resets to True on restart)
         self._detection_enabled: bool = True
-        # When True, _detection_enabled bypasses the schedule check entirely
+        # When True, the manual toggle overrides the schedule. The override is a
+        # one-shot: it auto-clears at the next schedule transition (the value of
+        # _is_in_schedule() at the moment the override was set is captured in
+        # _override_baseline; when _is_in_schedule() no longer equals that value,
+        # the override is released and the schedule takes over again).
         self._schedule_override: bool = False
+        self._override_baseline: bool | None = None
 
         # Exclusion zones
         self._exclusion_zones: list[dict] = load_zones()
@@ -104,7 +109,7 @@ class Pipeline:
             "frame_count": self._frame_count,
             "active_tracks": self._active_tracks,
             "connected": self._grabber.is_connected,
-            "detection_active": self._detection_enabled and (self._schedule_override or self._is_in_schedule()),
+            "detection_active": self._should_detect(),
             "schedule_enabled": self._config.schedule.enabled,
             "detection_enabled": self._detection_enabled,
             "cpu_percent": psutil.cpu_percent(interval=None),
@@ -215,17 +220,34 @@ class Pipeline:
         for key, value in kwargs.items():
             if hasattr(self._config.schedule, key):
                 setattr(self._config.schedule, key, value)
+        # Window/enabled changes invalidate the captured baseline; drop any
+        # in-flight override so the new schedule takes effect immediately.
+        self._schedule_override = False
+        self._override_baseline = None
 
     def set_detection_enabled(self, enabled: bool) -> None:
-        """Manually enable or disable detection, overriding the schedule."""
+        """Manually toggle detection. Override expires at the next schedule transition.
+
+        Captures the current `_is_in_schedule()` value as a baseline; the
+        override is released the next time the schedule's in/out state differs
+        from that baseline (e.g. force-ON at 09:00 with a 21:00–05:00 window
+        clears itself when 21:00 arrives, after which the schedule controls
+        detection again).
+        """
         self._detection_enabled = enabled
-        # Force-on sets the override flag so detection runs even outside scheduled hours.
-        # Force-off clears it (doesn't matter since enabled=False already gates the loop).
-        self._schedule_override = enabled
+        if self._config.schedule.enabled:
+            self._override_baseline = self._is_in_schedule()
+            self._schedule_override = True
+        else:
+            self._schedule_override = False
+            self._override_baseline = None
         logger.info("Detection manually %s", "enabled" if enabled else "disabled")
 
     def _is_in_schedule(self) -> bool:
-        """Return True if detection should run now (always True when scheduling is off)."""
+        """Return True if the schedule says detection should run right now.
+
+        Always True when scheduling is disabled.
+        """
         if not self._config.schedule.enabled:
             return True
         now = datetime.now().time()
@@ -235,6 +257,31 @@ class Pipeline:
             return start <= now <= end
         else:                       # overnight window e.g. 20:00–06:00
             return now >= start or now <= end
+
+    def _should_detect(self) -> bool:
+        """Resolve whether detection should run right now.
+
+        When scheduling is off, the manual toggle is authoritative. When
+        scheduling is on, the schedule controls unless a manual override is
+        in flight — and the override is released as soon as the schedule's
+        in/out state transitions away from the baseline captured when the
+        toggle was clicked.
+        """
+        if not self._config.schedule.enabled:
+            return self._detection_enabled
+
+        schedule_says = self._is_in_schedule()
+        if self._schedule_override:
+            if schedule_says != self._override_baseline:
+                self._schedule_override = False
+                self._override_baseline = None
+                logger.info(
+                    "Schedule override cleared (schedule transitioned); "
+                    "schedule now controls detection"
+                )
+                return schedule_says
+            return self._detection_enabled
+        return schedule_says
 
     def _process_loop(self) -> None:
         """Main processing loop running in a background thread."""
@@ -291,11 +338,14 @@ class Pipeline:
                         applied_fps = current_fps
 
                 # Compute detection state once per iteration
-                in_schedule = self._detection_enabled and (self._schedule_override or self._is_in_schedule())
+                in_schedule = self._should_detect()
 
-                # Flush clip writer on active → idle transition
+                # Flush clip writer on active → idle transition and drop the
+                # pre-buffer so ~1GB of stale full-res frames doesn't sit in
+                # memory until detection resumes.
                 if was_active and not in_schedule:
                     self._clip_writer.flush()
+                    self._clip_writer.clear_buffers()
                 was_active = in_schedule
 
                 # Frame skipping (doubled when idle to save CPU)

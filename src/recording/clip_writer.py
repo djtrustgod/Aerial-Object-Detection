@@ -1,8 +1,16 @@
-"""Rolling pre-buffer + threaded MP4 clip writer."""
+"""Rolling pre-buffer + streaming MP4 clip writer.
+
+Frames are streamed to ffmpeg via a bounded queue per active encoder, so
+memory peak is O(queue depth) rather than O(clip length). This matters at
+full camera resolution, where a 60s clip × ~24 fps × ~6 MB/frame × 2 buffers
+(annotated + clean) would otherwise grow the resident set to ~17 GB before
+the encoder finalizes.
+"""
 
 from __future__ import annotations
 
 import logging
+import queue
 import threading
 import time
 from collections import deque
@@ -16,14 +24,139 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+class _ClipEncoder:
+    """Background ffmpeg writer pulling frames from a bounded queue.
+
+    The thread is started immediately on construction; callers push frames
+    with ``submit()`` and signal end-of-stream with ``close()``. If the
+    encoder can't keep up with capture, ``submit()`` drops the frame rather
+    than blocking the capture loop — stalled capture is far worse than a
+    handful of dropped frames at the back of a clip.
+    """
+
+    def __init__(self, path: str, fps: float, high_quality: bool,
+                 max_queue: int) -> None:
+        self._path = path
+        self._fps = fps
+        self._high_quality = high_quality
+        self._queue: queue.Queue = queue.Queue(maxsize=max(1, max_queue))
+        self._closed = threading.Event()
+        self._dropped = 0
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    @property
+    def dropped(self) -> int:
+        return self._dropped
+
+    @property
+    def qsize(self) -> int:
+        return self._queue.qsize()
+
+    def submit(self, frame: np.ndarray) -> None:
+        """Non-blocking enqueue; drops the frame if the queue is full."""
+        if self._closed.is_set():
+            return
+        try:
+            self._queue.put_nowait(frame)
+        except queue.Full:
+            self._dropped += 1
+            # Log only at thresholds to avoid spamming when the encoder
+            # is sustained-behind.
+            if self._dropped in (1, 10, 100) or self._dropped % 1000 == 0:
+                logger.warning(
+                    "Encoder backpressure on %s: %d frame(s) dropped",
+                    self._path, self._dropped,
+                )
+
+    def close(self) -> None:
+        """Signal end-of-stream so the writer thread can drain and finalize.
+
+        Non-blocking: setting the closed flag is enough — the writer polls
+        the queue with a timeout and exits once the flag is set and the queue
+        has drained.
+        """
+        if self._closed.is_set():
+            return
+        self._closed.set()
+        # Nudge the writer in case it's waiting on an empty queue. Best-effort;
+        # if the queue is full we don't care — the polled flag check handles it.
+        try:
+            self._queue.put_nowait(None)
+        except queue.Full:
+            pass
+
+    def join(self, timeout: float = 15.0) -> None:
+        self._thread.join(timeout=timeout)
+        if self._thread.is_alive():
+            logger.warning(
+                "Encoder thread for %s did not finish within %.1fs",
+                self._path, timeout,
+            )
+
+    def is_alive(self) -> bool:
+        return self._thread.is_alive()
+
+    def _run(self) -> None:
+        # CRF 18 = visually lossless for clean archival clips
+        # CRF 28 = smaller file size for annotated clips
+        crf = "18" if self._high_quality else "28"
+        writer = imageio.get_writer(
+            self._path, fps=self._fps,
+            codec="libx264",
+            output_params=["-crf", crf, "-preset", "ultrafast", "-pix_fmt", "yuv420p"],
+        )
+        n_written = 0
+        try:
+            while True:
+                try:
+                    frame = self._queue.get(timeout=0.5)
+                except queue.Empty:
+                    if self._closed.is_set():
+                        break
+                    continue
+                if frame is None:
+                    break
+                if len(frame.shape) == 2:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+                # imageio expects RGB; OpenCV uses BGR
+                writer.append_data(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                n_written += 1
+            if self._dropped:
+                logger.warning(
+                    "Saved clip: %s (%d frames written, %d dropped due to "
+                    "encoder backpressure)",
+                    self._path, n_written, self._dropped,
+                )
+            else:
+                logger.info("Saved clip: %s (%d frames)", self._path, n_written)
+        except Exception:
+            logger.exception("Error writing clip: %s", self._path)
+        finally:
+            try:
+                writer.close()
+            except Exception:
+                pass
+            try:
+                out = Path(self._path)
+                if out.exists() and out.stat().st_size == 0:
+                    out.unlink()
+                    logger.warning("Removed empty clip: %s", self._path)
+            except OSError:
+                pass
+
+
 class ClipWriter:
-    """Maintains a rolling frame buffer and writes MP4 clips on demand."""
+    """Maintains a rolling frame buffer and streams MP4 clips on demand."""
 
     def __init__(self, clip_dir: str, pre_buffer_seconds: float = 3.0,
                  post_buffer_seconds: float = 5.0, fps: float = 30.0,
                  full_resolution: bool = False,
-                 max_clip_seconds: float = 60.0,
-                 max_concurrent_encoders: int = 2):
+                 max_clip_seconds: float = 60.0):
         self._clip_dir = Path(clip_dir)
         self._clip_dir.mkdir(parents=True, exist_ok=True)
         self._pre_buffer_seconds = pre_buffer_seconds
@@ -32,9 +165,8 @@ class ClipWriter:
         self._full_resolution = full_resolution
         # Hard ceiling on a single clip's duration. Without this, a noisy sky
         # can re-trigger detections every frame, pushing _record_end_deadline
-        # forward forever and growing the in-memory frame list until OOM.
+        # forward forever.
         self._max_clip_seconds = max_clip_seconds
-        self._max_concurrent_encoders = max(1, max_concurrent_encoders)
 
         # Rolling pre-buffer
         max_pre_frames = int(pre_buffer_seconds * fps) + 1
@@ -44,18 +176,17 @@ class ClipWriter:
 
         # Recording state
         self._recording = False
-        self._record_frames: list[np.ndarray] = []
-        self._record_frames_raw: list[np.ndarray] = []
-        self._record_frames_clean: list[np.ndarray] = []
         self._record_start_time: float = 0.0
         self._record_end_deadline: float = 0.0
         self._current_clip_path: str | None = None
+        # One encoder for the annotated clip + (optionally) one for the clean
+        # full-resolution archival clip. Closed when recording finalizes.
+        self._active_encoders: list[_ClipEncoder] = []
+        # Encoders whose recordings have ended but which may still be
+        # draining frames to disk. flush() waits for these to finish.
+        self._draining_encoders: list[_ClipEncoder] = []
 
         self._lock = threading.Lock()
-
-        # Encoder threads — tracked so flush() can wait for them before shutdown
-        self._writer_threads: list[threading.Thread] = []
-        self._writer_threads_lock = threading.Lock()
 
     @property
     def fps(self) -> float:
@@ -73,7 +204,9 @@ class ClipWriter:
     def feed_frame(self, frame: np.ndarray,
                    raw_frame: np.ndarray | None = None,
                    clean_frame: np.ndarray | None = None) -> None:
-        """Feed a frame to the rolling buffer. If recording, also capture it."""
+        """Feed a frame to the rolling buffer. If recording, also forward it
+        to the active encoder(s).
+        """
         with self._lock:
             self._buffer.append(frame.copy())
             if raw_frame is not None and self._full_resolution:
@@ -82,27 +215,23 @@ class ClipWriter:
                 self._buffer_clean.append(clean_frame.copy())
 
             if self._recording:
-                if raw_frame is not None and self._full_resolution:
-                    self._record_frames_raw.append(raw_frame.copy())
+                # Decide which frame goes to which encoder. The first encoder
+                # in _active_encoders is the annotated/main clip; if a second
+                # exists it's the clean archival clip.
+                if self._full_resolution and raw_frame is not None:
+                    main_payload = raw_frame.copy()
                 else:
-                    self._record_frames.append(frame.copy())
-                if clean_frame is not None:
-                    self._record_frames_clean.append(clean_frame.copy())
-                # Defensive frame-count ceiling in case monotonic clock drifts
-                # or the deadline check is somehow bypassed. At max_clip_seconds
-                # × fps, any further frames mean we're running away.
-                max_frames = int(self._max_clip_seconds * self._fps) + 1
-                over_limit = (
-                    len(self._record_frames) > max_frames
-                    or len(self._record_frames_raw) > max_frames
-                    or len(self._record_frames_clean) > max_frames
-                )
-                if time.monotonic() >= self._record_end_deadline or over_limit:
-                    if over_limit:
-                        logger.warning(
-                            "Clip frame count exceeded ceiling (%d frames); "
-                            "finalizing early to protect memory", max_frames,
-                        )
+                    main_payload = frame.copy()
+                clean_payload = clean_frame.copy() if clean_frame is not None else None
+
+                payloads = [main_payload]
+                if clean_payload is not None:
+                    payloads.append(clean_payload)
+
+                for enc, payload in zip(self._active_encoders, payloads):
+                    enc.submit(payload)
+
+                if time.monotonic() >= self._record_end_deadline:
                     self._finish_recording()
 
     def trigger_recording(self) -> str | None:
@@ -124,122 +253,86 @@ class ClipWriter:
                 deadline, now + self._max_clip_seconds
             )
 
-            # Include pre-buffer frames
-            if self._full_resolution and self._buffer_raw:
-                self._record_frames_raw = list(self._buffer_raw)
-                self._record_frames = []
-            else:
-                self._record_frames = list(self._buffer)
-            self._record_frames_clean = list(self._buffer_clean)
-
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"clip_{timestamp}.mp4"
             self._current_clip_path = str(self._clip_dir / filename)
+
+            # Queue must hold the entire pre-buffer plus some slack for the
+            # capture loop to outrun the encoder briefly without dropping.
+            pre_frames = int(self._pre_buffer_seconds * self._fps) + 1
+            max_queue = pre_frames + 30
+
+            # Annotated main clip
+            main_encoder = _ClipEncoder(
+                self._current_clip_path,
+                self._fps, high_quality=False, max_queue=max_queue,
+            )
+            self._active_encoders = [main_encoder]
+
+            # Optional clean archival clip — full camera resolution, CRF 18
+            if self._buffer_clean:
+                clean_path = self._current_clip_path.replace(".mp4", "_clean.mp4")
+                clean_encoder = _ClipEncoder(
+                    clean_path,
+                    self._fps, high_quality=True, max_queue=max_queue,
+                )
+                self._active_encoders.append(clean_encoder)
+
+            # Pre-buffer feed: drain the rolling buffers into the encoders
+            # synchronously. Queue size is sized for this; if it overflows,
+            # the encoder will drop tail frames with a warning rather than
+            # block the capture thread.
+            if self._full_resolution and self._buffer_raw:
+                main_pre = list(self._buffer_raw)
+            else:
+                main_pre = list(self._buffer)
+            for f in main_pre:
+                main_encoder.submit(f)
+
+            if len(self._active_encoders) > 1 and self._buffer_clean:
+                clean_pre = list(self._buffer_clean)
+                for f in clean_pre:
+                    self._active_encoders[1].submit(f)
 
             logger.info("Started recording clip: %s", self._current_clip_path)
             return self._current_clip_path
 
     def _finish_recording(self) -> None:
-        """Finish recording and write clip to disk in a background thread."""
-        if self._full_resolution and self._record_frames_raw:
-            frames = self._record_frames_raw.copy()
-        else:
-            frames = self._record_frames.copy()
-        clean_frames = self._record_frames_clean.copy()
-        clip_path = self._current_clip_path
-        fps = self._fps
+        """Close active encoders and reset recording state.
 
-        # Sanity check: frame count vs. real elapsed time. Includes pre-buffer
-        # frames so it is "frames written / real seconds since trigger" — a
-        # ratio of ~1.0 + (pre_buffer / real) is honest. Ratio drifting much
-        # higher than that means the loop is over-feeding the writer.
+        Must be called with self._lock held. Encoders continue draining their
+        queues in their own threads; flush() waits on them.
+        """
         real_duration = time.monotonic() - self._record_start_time
-        expected_frames = real_duration * fps
-        ratio = len(frames) / expected_frames if expected_frames > 0 else 0.0
         logger.info(
-            "Finalizing clip: %d frames, fps=%.1f, real=%.2fs "
-            "(expected %.0f frames; ratio %.2f)",
-            len(frames), fps, real_duration, expected_frames, ratio,
+            "Finalizing clip: %s (real=%.2fs, fps=%.1f)",
+            self._current_clip_path, real_duration, self._fps,
         )
 
+        for enc in self._active_encoders:
+            enc.close()
+            self._draining_encoders.append(enc)
+
+        self._active_encoders = []
         self._recording = False
-        self._record_frames = []
-        self._record_frames_raw = []
-        self._record_frames_clean = []
         self._current_clip_path = None
 
-        if frames and clip_path:
-            self._spawn_writer(self._write_clip, (frames, clip_path, fps))
-
-            # Write clean clip (high quality, no annotations)
-            if clean_frames:
-                clean_path = clip_path.replace(".mp4", "_clean.mp4")
-                self._spawn_writer(
-                    self._write_clip, (clean_frames, clean_path, fps, True),
-                )
-
-    def _spawn_writer(self, target, args) -> None:
-        with self._writer_threads_lock:
-            self._writer_threads = [t for t in self._writer_threads if t.is_alive()]
-            if len(self._writer_threads) >= self._max_concurrent_encoders:
-                # Drop rather than queue: blocking the caller would stall the
-                # capture pipeline; queueing would let backlog grow unboundedly.
-                # A dropped clip is recoverable (we'll catch the next event);
-                # a stalled pipeline is not.
-                logger.warning(
-                    "Encoder pool at capacity (%d); dropping clip to protect memory. "
-                    "Arg sample: %r",
-                    self._max_concurrent_encoders,
-                    args[1] if len(args) > 1 else args,
-                )
-                return
-            thread = threading.Thread(target=target, args=args, daemon=True)
-            self._writer_threads.append(thread)
-        thread.start()
-
-    @staticmethod
-    def _write_clip(frames: list[np.ndarray], path: str,
-                    fps: float = 15.0, high_quality: bool = False) -> None:
-        """Write frames to an H.264 MP4 file (runs in a background thread)."""
-        if not frames:
-            return
-
-        # CRF 18 = visually lossless for clean archival clips
-        # CRF 28 = smaller file size for annotated clips
-        crf = "18" if high_quality else "28"
-        writer = imageio.get_writer(
-            path, fps=fps,
-            codec="libx264",
-            output_params=["-crf", crf, "-preset", "ultrafast", "-pix_fmt", "yuv420p"],
-        )
-        try:
-            for frame in frames:
-                if len(frame.shape) == 2:
-                    frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-                # imageio expects RGB; OpenCV uses BGR
-                writer.append_data(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            logger.info("Saved clip: %s (%d frames)", path, len(frames))
-        except Exception:
-            logger.exception("Error writing clip: %s", path)
-        finally:
-            writer.close()
-            try:
-                out = Path(path)
-                if out.exists() and out.stat().st_size == 0:
-                    out.unlink()
-                    logger.warning("Removed empty clip: %s", path)
-            except OSError:
-                pass
+    def clear_buffers(self) -> None:
+        """Drop all pre-buffer frames. Call on active→idle transition so the
+        ~pre_buffer_seconds × fps full-res frames don't sit in memory.
+        """
+        with self._lock:
+            self._buffer.clear()
+            self._buffer_raw.clear()
+            self._buffer_clean.clear()
 
     def flush(self, writer_timeout: float = 15.0) -> None:
         """Force-finish any in-progress recording and wait for encoders to finalize."""
         with self._lock:
             if self._recording:
                 self._finish_recording()
+            encoders = list(self._draining_encoders)
+            self._draining_encoders = []
 
-        with self._writer_threads_lock:
-            threads = list(self._writer_threads)
-        for t in threads:
-            t.join(timeout=writer_timeout)
-            if t.is_alive():
-                logger.warning("Encoder thread did not finish within %.1fs", writer_timeout)
+        for enc in encoders:
+            enc.join(timeout=writer_timeout)

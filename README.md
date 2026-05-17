@@ -25,7 +25,7 @@ Nighttime aerial object detection system using classical computer vision. Connec
 - **Event recording** with pre/post-event buffered video clips and SQLite event logging
 - **Web dashboard** with live MJPEG stream via WebSocket, detection history, and statistics (Chart.js)
 - **Exclusion zones** — draw rectangular zones on a live camera snapshot to suppress false positives from trees, lights, roads, etc. Zones persist across restarts and appear as red overlays on the live stream
-- **Detection scheduling** with configurable time windows and manual override toggle
+- **Detection scheduling** with configurable time windows and a one-shot manual override toggle — toggling detection On/Off bypasses the schedule until the next window transition, at which point the schedule resumes control automatically
 - **Fully configurable** via YAML with CLI overrides and live settings from the dashboard
 
 ## Requirements
@@ -273,7 +273,7 @@ src/
     tracker.py               # Centroid-based multi-object tracker
   recording/
     models.py                # Data models (Detection, TrackedObject, DetectionEvent)
-    clip_writer.py           # Buffered MP4 clip writer
+    clip_writer.py           # Streaming MP4 clip writer (per-clip ffmpeg thread + bounded queue)
     event_logger.py          # SQLite event logger (WAL mode)
   web/
     app.py                   # FastAPI application factory
@@ -281,7 +281,7 @@ src/
     websocket.py             # Live MJPEG stream over WebSocket
     templates/               # Jinja2 templates (dashboard, history, settings, zones)
     static/                  # CSS and JS assets
-tests/                       # Unit tests (11 tests)
+tests/                       # Unit tests (47 tests)
 ```
 
 ## Testing
