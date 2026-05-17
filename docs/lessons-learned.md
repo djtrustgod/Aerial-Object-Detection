@@ -46,3 +46,21 @@ PowerShell 5.1's runspace is single-threaded and not designed to be re-entered f
 2. Drain the queue from the UI thread (a WinForms `Timer` is fine). All PS code stays on one thread.
 3. If you must use a PS scriptblock as a delegate, prove it's only invoked synchronously on the runspace's own thread before relying on it.
 4. When a hosted process exits without throwing — no dialog, no log, no exception — assume the failure happened in native code below the CLR. Look for cross-thread runtime re-entry, not for a missing `try/catch`.
+
+---
+
+## 4. Match Loop Rate to Source Rate Before Tagging Output
+
+**Incident:** v0.4.7 — Recorded `.mp4` clips played back as visibly stuttery slow-motion. Initial diagnosis blamed CPU-bound under-feeding (loop running slower than the camera, fewer frames than the fps tag claimed). That was backwards: the loop was running *faster* than the camera, not slower, so it was reading the same `_frame` from the grabber multiple times and feeding it to the clip writer. Clips were tagged at the camera's nominal fps but contained duplicate frames — playback at 1.5× real time. Two things misled the early diagnosis:
+
+- The HUD's `FPS:` overlay only counted heavy-branch iterations (skip-branch had a `continue` before the counter increment), so it read `loop_rate / frame_skip`. A reading of "5 FPS" at default `frame_skip=4` actually meant the loop was ticking at ~20 Hz; "8 FPS" meant ~32 Hz (over-feeding).
+- "CPU usage is low" doesn't disprove CPU-bound; single-thread saturation is invisible at the total-CPU level. So the CPU theory wasn't formally disproven, just made unlikely. Nothing predicted the *exact* symptom (slow-mo with duplicates) the way over-feeding did.
+
+**Rule:** When a producer-consumer system has independent rates, verify the rate match before tagging output:
+
+1. Any consumer of an upstream stream (frame grabber, network socket, queue) must either consume only when the upstream advances (track a sequence number / version), or block until it does. Iterating "as fast as you can" reads the same item repeatedly when you outpace the producer.
+2. Output tagged with a rate (fps in MP4, sample rate in audio, ticks/sec in metrics) must match the rate at which data was actually written to it — not the source's *advertised* rate, not the loop's tick rate. If the loop and producer are decoupled, log both rates side-by-side at startup and watch for drift.
+3. Don't trust a HUD/metric that derives from a subset of iterations (e.g. only the heavy branch) without explicitly noting the skip factor in the label. A misreading 5×-off can flip the diagnosis. Either show the raw rate or label the derived one (e.g. "Detection FPS" vs "Loop FPS").
+4. When debugging a slow-mo / fast-forward / stutter symptom, log `frames_written / (fps_tag * real_duration)`. Ratio > 1 = over-feeding (duplicates). Ratio < 1 = under-feeding (CPU or network bound). The number tells you which way the loop is racing the source.
+
+**Postscript (verified 2026-05-10):** First post-fix run on the configured RTSP camera produced `Camera FPS mismatch: CAP_PROP_FPS=20.0, measured=35.0`. The camera underreports its own delivery rate by ~75%. That made the "and the camera tag may also be wrong" hedge from the plan into the *primary* effect on this hardware: even with perfect dedup, the writer would have been tagged at the camera's claimed 20 fps while fed at the real 35 fps, leaving the clips slow-mo. Two takeaways: (a) the arrival-rate sanity check was load-bearing, not just insurance — keep it; (b) for any future sensor-fed pipeline, assume the sensor's self-reported rate is a lie until measured, and budget for a measurement step on first connect.

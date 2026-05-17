@@ -149,6 +149,19 @@ class ClipWriter:
         clip_path = self._current_clip_path
         fps = self._fps
 
+        # Sanity check: frame count vs. real elapsed time. Includes pre-buffer
+        # frames so it is "frames written / real seconds since trigger" — a
+        # ratio of ~1.0 + (pre_buffer / real) is honest. Ratio drifting much
+        # higher than that means the loop is over-feeding the writer.
+        real_duration = time.monotonic() - self._record_start_time
+        expected_frames = real_duration * fps
+        ratio = len(frames) / expected_frames if expected_frames > 0 else 0.0
+        logger.info(
+            "Finalizing clip: %d frames, fps=%.1f, real=%.2fs "
+            "(expected %.0f frames; ratio %.2f)",
+            len(frames), fps, real_duration, expected_frames, ratio,
+        )
+
         self._recording = False
         self._record_frames = []
         self._record_frames_raw = []

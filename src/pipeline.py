@@ -243,9 +243,12 @@ class Pipeline:
         fps_timer = time.monotonic()
         fps_frame_count = 0
         was_active = False
+        last_frame_num = -1
 
-        # Set FPS on components once connected
-        fps_set = False
+        # Track the last fps applied to the clip writer. The grabber may
+        # update its own fps after connect (see _sample_arrival_rate), so we
+        # re-apply whenever it changes rather than latching once.
+        applied_fps: float | None = None
 
         while self._running:
             try:
@@ -258,10 +261,34 @@ class Pipeline:
                     time.sleep(0.01)
                     continue
 
-                # Set FPS from stream on first frame
-                if not fps_set and self._grabber.is_connected:
-                    self._clip_writer.fps = self._grabber.fps
-                    fps_set = True
+                # Skip if the grabber hasn't produced a new frame yet. Without
+                # this, the loop runs faster than the camera and feeds the
+                # clip writer the same frame multiple times — clips end up
+                # tagged at camera fps but stuffed with duplicates, which
+                # plays back as slow-mo stutter.
+                if frame_num == last_frame_num:
+                    time.sleep(0.005)
+                    continue
+                last_frame_num = frame_num
+
+                # Measure RTSP arrival rate at the point of unique-frame
+                # arrival, before frame_skip drops anything — so the HUD/stats
+                # FPS reflects the stream itself, not the detection cadence.
+                fps_frame_count += 1
+                elapsed = time.monotonic() - fps_timer
+                if elapsed >= 1.0:
+                    self._fps_actual = fps_frame_count / elapsed
+                    fps_frame_count = 0
+                    fps_timer = time.monotonic()
+
+                # Apply (or re-apply) grabber fps to the clip writer when it
+                # changes — covers both first connect and post-connect
+                # arrival-rate overrides.
+                if self._grabber.is_connected:
+                    current_fps = self._grabber.fps
+                    if current_fps != applied_fps:
+                        self._clip_writer.fps = current_fps
+                        applied_fps = current_fps
 
                 # Compute detection state once per iteration
                 in_schedule = self._detection_enabled and (self._schedule_override or self._is_in_schedule())
@@ -323,14 +350,6 @@ class Pipeline:
                     # Discard if URL changed while this frame was being processed
                     if self._url_version == url_ver:
                         self._display_frame = annotated
-
-                # FPS calculation
-                fps_frame_count += 1
-                elapsed = time.monotonic() - fps_timer
-                if elapsed >= 1.0:
-                    self._fps_actual = fps_frame_count / elapsed
-                    fps_frame_count = 0
-                    fps_timer = time.monotonic()
 
             except Exception:
                 logger.exception("Error in process loop, recovering...")

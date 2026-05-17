@@ -33,6 +33,13 @@ class FrameGrabber:
         self._connected = False
         self._fps: float = 30.0
 
+        # CAP_PROP_FPS is unreliable on RTSP — some cameras hardcode 25/30
+        # regardless of actual delivery. Measure arrival rate over the first
+        # N frames after connect and override self._fps if it disagrees.
+        self._fps_measure_target = 30
+        self._fps_measure_count = 0
+        self._fps_measure_start: float = 0.0
+
     @property
     def is_connected(self) -> bool:
         return self._connected
@@ -95,6 +102,10 @@ class FrameGrabber:
             if fps and fps > 0:
                 self._fps = fps
 
+            # Reset arrival-rate measurement; we'll re-measure post-connect.
+            self._fps_measure_count = 0
+            self._fps_measure_start = 0.0
+
             self._connected = True
             logger.info("Connected to stream: %s (%.1f FPS)", self._url, self._fps)
             return True
@@ -111,6 +122,37 @@ class FrameGrabber:
                 pass
             self._cap = None
         self._connected = False
+
+    def _sample_arrival_rate(self) -> None:
+        """Measure actual frame arrival rate and override self._fps if the
+        camera-reported value disagrees by more than 10%.
+        """
+        if self._fps_measure_count >= self._fps_measure_target:
+            return
+        if self._fps_measure_count == 0:
+            self._fps_measure_start = time.monotonic()
+        self._fps_measure_count += 1
+        if self._fps_measure_count < self._fps_measure_target:
+            return
+
+        elapsed = time.monotonic() - self._fps_measure_start
+        if elapsed <= 0:
+            return
+        # Counted N frames separated by N-1 inter-arrival intervals.
+        measured = (self._fps_measure_target - 1) / elapsed
+        reported = self._fps
+        if reported > 0 and abs(measured - reported) / reported > 0.10:
+            logger.warning(
+                "Camera FPS mismatch: CAP_PROP_FPS=%.1f, measured=%.1f over "
+                "%d frames (%.2fs). Using measured value.",
+                reported, measured, self._fps_measure_target, elapsed,
+            )
+            self._fps = measured
+        else:
+            logger.info(
+                "Camera FPS verified: reported=%.1f, measured=%.1f",
+                reported, measured,
+            )
 
     def _grab_loop(self) -> None:
         """Main grab loop running in a background thread."""
@@ -142,6 +184,7 @@ class FrameGrabber:
                         if self._connected:
                             self._frame = frame
                             self._frame_number += 1
+                    self._sample_arrival_rate()
 
             except Exception:
                 logger.exception("Error in grab loop")
